@@ -1,0 +1,70 @@
+/* 1. WAJIB DI ATAS SENDIRI */
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Manrope:wght@400;500;600&family=Caveat:wght@400;700&display=swap');
+
+/* 2. KONFIGURASI TEMA (Syntax v4 - Red Masashimura) */
+@theme {
+  /* Pewarnaan Merah Mewah (Primary) */
+  --color-primary: #dc2626; 
+  --color-accent: #f59e0b;  
+  
+  /* Background & UI Colors */
+  --color-background: #050505; 
+  --color-foreground: #ffffff;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-card: rgba(30, 41, 59, 0.3);
+  --color-secondary: rgba(30, 41, 59, 0.5);
+
+  /* Typography */
+  --font-oswald: "Oswald", sans-serif;
+  --font-manrope: "Manrope", sans-serif;
+  --font-caveat: "Caveat", cursive;
+}
+
+/* 3. ATURAN DASAR (Base) */
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Manrope', sans-serif;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Oswald', sans-serif;
+  }
+}
+
+/* 4. CUSTOM UTILITIES */
+@layer utilities {
+  .font-oswald { font-family: 'Oswald', sans-serif; }
+  .font-manrope { font-family: 'Manrope', sans-serif; }
+  .font-caveat { font-family: 'Caveat', cursive; }
+  
+  .bg-noise {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+  }
+  
+  /* Shadow disesuaikan ke Merah biar sinkron sama tombol KP lo */
+  .shadow-neo-red {
+    box-shadow: 4px 4px 0px #991b1b;
+  }
+  .shadow-neo-red-hover {
+    box-shadow: 2px 2px 0px #991b1b;
+  }
+
+  /* Shadow Kuning tetep gw simpen kalau sewaktu-waktu lo butuh buat aksen logo */
+  .shadow-neo-yellow {
+    box-shadow: 4px 4px 0px #f59e0b;
+  }
+}
+
+.custom-scroll {
+  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;  /* IE & Edge */
+}
+
+.custom-scroll::-webkit-scrollbar {
+  display: none;             /* Chrome, Safari, Edge */
+}
