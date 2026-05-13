@@ -1,18 +1,19 @@
-import { createApp } from "vue";
-import { createPinia } from "pinia"; // 1. Import Pinia
-import App from "./App.vue";
-import router from "./router";
-import Toast from "vue-toastification";
-import "vue-toastification/dist/index.css";
-import "bootstrap/dist/css/bootstrap.min.css";
-// Opsional: Import JS Bootstrap agar Navbar toggler berfungsi
-import "bootstrap/dist/js/bootstrap.bundle.min.js";
+// src/main.js
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+import router from './router'
+import { useAuthStore } from './stores/auth'
+import './index.css'
 
-const app = createApp(App);
-const pinia = createPinia(); // 2. Buat instance Pinia
+const app = createApp(App)
+const pinia = createPinia()
 
-app.use(pinia);
-app.use(router);
-app.use(Toast);
+app.use(pinia)
+app.use(router)
 
-app.mount("#app");
+// Inisialisasi Auth Store setelah Pinia aktif
+const auth = useAuthStore()
+auth.checkAuth()   // Ini penting agar user langsung ter-load
+
+app.mount('#app')
