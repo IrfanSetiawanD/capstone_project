@@ -1,4 +1,7 @@
 from pathlib import Path
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 # ========================
 # BASE CONFIG
@@ -7,6 +10,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-ftxu0z)2z=ei553@4usfbx@*$037=ae8=8b+8bl(_%w*++t-uy'
 DEBUG = True
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+# ========================
+# CLOUDINARY
+# ========================
+cloudinary.config( 
+  cloud_name = "dndonk7an", 
+  api_key = "147598731216387", 
+  api_secret = "Zn-DQPMHfi__Dwmxgqhkjgd_dWw",
+  secure = True
+)
+
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # ========================
 # INSTALLED APPS
@@ -24,6 +39,7 @@ INSTALLED_APPS = [
     'accounts',
     'menu',
     'order',
+    'homepage',
 ]
 
 # ========================

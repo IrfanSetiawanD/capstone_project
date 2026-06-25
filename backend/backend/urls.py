@@ -6,8 +6,9 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
-    path('api/', include('menu.urls')),   # Mengakses api/menus/ & api/menus/<id>/
-    path('api/', include('order.urls')),  # Mengakses api/orders/ & api/stats/dashboard/
+    path('api/', include('menu.urls')),
+    path('api/', include('order.urls')),
+    path('api/homepage/', include('homepage.urls')),
 ]
 
 if settings.DEBUG:

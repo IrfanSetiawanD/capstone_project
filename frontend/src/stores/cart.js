@@ -1,42 +1,48 @@
 // src/stores/cart.js
+
 import { defineStore } from "pinia";
 import { ref, computed, watch } from "vue";
-import axios from "axios";
+import { orderAPI } from "@/api";
 
 export const useCartStore = defineStore("cart", () => {
-  // --- STATE ---
   const cart = ref(JSON.parse(localStorage.getItem("cart") || "{}"));
+
   const isLoyal = ref(false);
   const discountPercent = ref(0);
 
-  // --- PERSISTENCE ---
   watch(
     cart,
-    (newCart) => {
-      localStorage.setItem("cart", JSON.stringify(newCart));
+    (value) => {
+      localStorage.setItem("cart", JSON.stringify(value));
     },
-    { deep: true },
+    {
+      deep: true,
+    }
   );
 
-  // --- ACTIONS ---
   const addToCart = (menu) => {
-    if (!cart.value[menu.id]) {
-      cart.value[menu.id] = { ...menu, quantity: 1 };
-    } else {
-      cart.value[menu.id].quantity += 1;
+    const cartKey = `${menu.id}-${Date.now()}`;
+
+    cart.value[cartKey] = {
+      ...menu,
+      cartKey,
+      quantity: 1,
+      notes: "",
+    };
+  };
+
+  const updateQuantity = (cartKey, delta) => {
+    if (!cart.value[cartKey]) return;
+
+    cart.value[cartKey].quantity += delta;
+
+    if (cart.value[cartKey].quantity <= 0) {
+      delete cart.value[cartKey];
     }
   };
 
-  const updateQuantity = (menuId, delta) => {
-    if (!cart.value[menuId]) return;
-    cart.value[menuId].quantity += delta;
-    if (cart.value[menuId].quantity <= 0) {
-      removeFromCart(menuId);
-    }
-  };
-
-  const removeFromCart = (menuId) => {
-    delete cart.value[menuId];
+  const removeFromCart = (cartKey) => {
+    delete cart.value[cartKey];
   };
 
   const clearCart = () => {
@@ -45,52 +51,63 @@ export const useCartStore = defineStore("cart", () => {
     discountPercent.value = 0;
   };
 
-  // Fungsi untuk memanggil API Django yang baru kita buat
   const checkLoyalty = async (phone) => {
+    if (!phone || phone.length < 9) {
+      isLoyal.value = false;
+      discountPercent.value = 0;
+      return;
+    }
+
     try {
-      const response = await axios.get(`/api/orders/check-loyalty/`, {
-        params: { phone },
-      });
-      isLoyal.value = response.data.is_loyal;
-      discountPercent.value = response.data.discount_percent;
-    } catch (error) {
-      console.error("Gagal mengecek status loyalitas:", error);
+      const { data } = await orderAPI.checkLoyalty(phone);
+
+      isLoyal.value = data.is_loyal;
+      discountPercent.value = data.discount_percent ?? 0;
+    } catch (err) {
+      console.error(err);
+
       isLoyal.value = false;
       discountPercent.value = 0;
     }
   };
 
-  // --- GETTERS ---
+  const cartItems = computed(() => Object.values(cart.value));
+
   const cartItemCount = computed(() =>
-    Object.values(cart.value).reduce((sum, item) => sum + item.quantity, 0),
+    cartItems.value.reduce((sum, item) => sum + item.quantity, 0)
   );
 
   const subtotal = computed(() =>
-    Object.values(cart.value).reduce(
-      (total, item) => total + Number(item.price) * item.quantity,
-      0,
-    ),
+    cartItems.value.reduce(
+      (sum, item) => sum + Number(item.price) * item.quantity,
+      0
+    )
   );
 
-  // Menghitung potongan harga
-  const discountAmount = computed(() =>
-    isLoyal.value ? (subtotal.value * discountPercent.value) / 100 : 0,
-  );
+  const discountAmount = computed(() => {
+    if (!isLoyal.value) return 0;
 
-  // Menghitung harga akhir setelah diskon
+    return subtotal.value * (discountPercent.value / 100);
+  });
+
   const totalPrice = computed(() => subtotal.value - discountAmount.value);
 
-  const isEmpty = computed(() => Object.keys(cart.value).length === 0);
+  const isEmpty = computed(() => cartItems.value.length === 0);
 
   return {
     cart,
+
     isLoyal,
     discountPercent,
+
+    cartItems,
     cartItemCount,
+
     subtotal,
     discountAmount,
     totalPrice,
     isEmpty,
+
     addToCart,
     updateQuantity,
     removeFromCart,

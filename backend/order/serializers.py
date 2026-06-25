@@ -1,44 +1,105 @@
 from rest_framework import serializers
-from .models import Order, OrderItem, Customer
+from .models import Order, OrderItem, LoyaltySettings, Menu, Category
+import math
 
-# ==========================================
-# 1. INPUT SERIALIZERS (Digunakan saat checkout/POST)
-# ==========================================
-class OrderItemInputSerializer(serializers.Serializer):
-    menu_id = serializers.IntegerField()
-    quantity = serializers.IntegerField()
+class MenuSerializer(serializers.ModelSerializer):
+    category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
+    category_name = serializers.CharField(source='category.name', read_only=True)
 
-class OrderInputSerializer(serializers.Serializer):
-    phone = serializers.CharField(required=False, allow_blank=True)
-    payment_method = serializers.CharField()
-    order_type = serializers.CharField(required=False, allow_blank=True)
-    items = OrderItemInputSerializer(many=True)
+    # Write-only untuk upload
+    image = serializers.ImageField(write_only=True, required=False, allow_null=True)
+    # Read-only URL gambar
+    image_url = serializers.SerializerMethodField(read_only=True)
 
-# ==========================================
-# 2. OUTPUT SERIALIZERS (Digunakan saat GET/List)
-# ==========================================
-class CustomerSerializer(serializers.ModelSerializer):
+    # Harga web = harga POS + 1% (dibulatkan ke atas ke kelipatan 100)
+    web_price = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
-        model = Customer
-        fields = ['id', 'name', 'phone']
+        model = Menu
+        fields = [
+            "id",
+            "name",
+            "price",        # harga POS (normal)
+            "web_price",    # harga web (markup 1%)
+            "category",
+            "category_name",
+            "description",
+            "image",
+            "image_url",
+            "is_available",
+            "is_active",
+        ]
+
+    def get_image_url(self, obj):
+        if obj.image:
+            return obj.image.url
+        return None
+
+    def get_web_price(self, obj):
+        if obj.price:
+            # Markup 1%, bulatkan ke atas ke kelipatan 500
+            marked_up = float(obj.price) * 1.01
+            rounded   = math.ceil(marked_up / 500) * 500
+            return int(rounded)
+        return None
+
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    # Mengambil nama menu dari relasi model OrderItem -> Menu
-    menu_name = serializers.ReadOnlyField(source='menu.name')
-    
+    menu_name = serializers.CharField(source="menu.name", read_only=True)
+
     class Meta:
         model = OrderItem
-        fields = ['id', 'menu_name', 'quantity', 'price']
+        fields = ["id", "menu_name", "quantity", "price", "notes"]
+
 
 class OrderSerializer(serializers.ModelSerializer):
-    # Serializer bersarang untuk menampilkan data lengkap
-    customer = CustomerSerializer(read_only=True)
     items = OrderItemSerializer(many=True, read_only=True)
+    created_time = serializers.SerializerMethodField()
+
+    def get_created_time(self, obj):
+        return obj.created_at.strftime("%H:%M WIB")
 
     class Meta:
         model = Order
         fields = [
-            'id', 'customer', 'total_price', 'discount', 
-            'final_price', 'status', 'payment_method', 
-            'created_at', 'items'
+            "id",
+            "order_number",
+            "source",
+            "status",
+            "payment_status",
+            "payment_method",
+            "is_deferred_payment",
+            "customer_name",
+            "customer_phone",
+            "table_number",
+            "subtotal",
+            "discount_amount",
+            "total_price",
+            "notes",
+            "created_at",
+            "created_time",
+            "items",
         ]
+
+
+class LoyaltySettingsSerializer(serializers.ModelSerializer):
+    # Alias: SystemSettings.vue mengirim/membaca discount_percent,
+    # sedangkan model menyimpan discount_percentage.
+    # Kedua field di-expose agar keduanya bisa dipakai.
+    discount_percent = serializers.DecimalField(
+        max_digits=5, decimal_places=2,
+        source='discount_percentage',
+        required=False,
+    )
+
+    class Meta:
+        model = LoyaltySettings
+        fields = [
+            "min_orders",
+            "min_spending",
+            "period_days",
+            "discount_percentage",   # dipakai backend & LoyalCustomers.vue
+            "discount_percent",      # alias untuk SystemSettings.vue
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]

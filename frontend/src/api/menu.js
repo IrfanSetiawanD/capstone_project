@@ -1,6 +1,11 @@
 import apiClient from "./client";
 
 export const menuAPI = {
+  // Catatan: filter kategori dilakukan di FRONTEND (lihat Menu.vue -> filteredMenus).
+  // Endpoint ini sengaja tidak menerima parameter kategori, supaya tidak ada
+  // parameter yang dikirim tapi diabaikan oleh fungsi ini (bug sebelumnya).
+  // Kalau nanti backend sudah mendukung filter server-side, tinggal tambahkan:
+  //   getAll: (category) => apiClient.get("/menus/", { params: { category } })
   getAll: () => apiClient.get("/menus/"),
   create: (formData) =>
     apiClient.post("/menus/", formData, {

@@ -1,144 +1,204 @@
 <template>
-  <div class="max-w-4xl mx-auto p-4">
-    <div class="mb-12">
-      <h1 class="font-oswald text-5xl uppercase italic tracking-tighter">
+  <div class="max-w-5xl mx-auto p-6 space-y-8 text-white">
+
+    <div>
+      <h1 class="font-oswald text-4xl uppercase">
         System Settings
       </h1>
-      <p class="text-white/40 text-sm font-light">
-        Konfigurasi variabel bisnis Masashimura
+
+      <p class="text-white/40">
+        Konfigurasi Loyalitas Masashimura
       </p>
     </div>
 
-    <div class="space-y-8">
-      <div
-        class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-8 transition-all duration-300"
-      >
-        <h2
-          class="font-oswald text-xl uppercase tracking-wider mb-6 text-red-500 flex items-center gap-2"
-        >
-          <Star size="20" /> Aturan Loyalitas
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <label
-              class="block text-[10px] uppercase text-white/40 mb-3 tracking-widest"
-              >Min. Pesanan (Bulan)</label
-            >
-            <input
-              v-model="settings.min_orders"
-              type="number"
-              class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-3 focus:border-red-600 outline-none transition-all text-white"
-            />
-          </div>
-          <div>
-            <label
-              class="block text-[10px] uppercase text-white/40 mb-3 tracking-widest"
-              >Persentase Diskon (%)</label
-            >
-            <input
-              v-model="settings.discount_percent"
-              type="number"
-              class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-3 focus:border-red-600 outline-none transition-all text-white"
-            />
-          </div>
-        </div>
-      </div>
+    <div
+      class="bg-[#0b0b0b] rounded-2xl border border-white/10 p-8 space-y-8"
+    >
 
-      <div
-        class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-8 transition-all duration-300"
-      >
-        <h2
-          class="font-oswald text-xl uppercase tracking-wider mb-6 text-red-500 flex items-center gap-2"
-        >
-          <Phone size="20" /> Jalur Pesanan (WhatsApp)
-        </h2>
+      <div class="grid md:grid-cols-2 gap-6">
+
         <div>
-          <label
-            class="block text-[10px] uppercase text-white/40 mb-3 tracking-widest"
-            >Nomor WA Admin</label
-          >
+          <label class="label">
+            Minimal Order
+          </label>
+
           <input
-            v-model="settings.admin_whatsapp"
-            type="text"
-            class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-3 focus:border-red-600 outline-none transition-all text-white"
-            placeholder="628..."
+            v-model.number="settings.min_orders"
+            type="number"
+            class="input"
           />
-          <p class="text-[10px] text-white/20 mt-3 italic">
-            *Gunakan format 62 (tanpa + atau 0)
-          </p>
         </div>
+
+        <div>
+          <label class="label">
+            Diskon (%)
+          </label>
+
+          <input
+            v-model.number="settings.discount_percent"
+            type="number"
+            class="input"
+          />
+        </div>
+
+        <div>
+          <label class="label">
+            Minimal Belanja
+          </label>
+
+          <input
+            v-model.number="settings.min_spending"
+            type="number"
+            class="input"
+          />
+        </div>
+
+        <div>
+          <label class="label">
+            Periode (Hari)
+          </label>
+
+          <input
+            v-model.number="settings.period_days"
+            type="number"
+            class="input"
+          />
+        </div>
+
       </div>
 
-      <div class="flex justify-end pt-4">
-        <button
-          @click="saveSettings"
-          :disabled="isSaving"
-          class="bg-red-600 text-white font-oswald uppercase px-12 py-4 rounded-xl shadow-xl hover:bg-red-500 transition-all tracking-[0.2em] font-bold text-sm disabled:opacity-50"
-        >
-          {{ isSaving ? "Menyimpan..." : "Simpan Perubahan" }}
-        </button>
-      </div>
     </div>
 
     <div
-      v-if="auth.user?.role === 'owner'"
-      class="mt-12 pt-8 border-t border-white/10"
+      class="bg-[#0b0b0b] rounded-2xl border border-white/10 p-8 space-y-4"
     >
-      <button
-        @click="showCreateModal = true"
-        class="bg-white/5 hover:bg-white/10 px-8 py-4 rounded-2xl flex items-center gap-3 text-lg font-medium transition-all border border-dashed border-white/10"
-      >
-        <span class="text-2xl text-red-500">+</span> Buat Akun Baru (Admin /
-        Owner)
-      </button>
+
+      <label class="label">
+        Nomor WhatsApp
+      </label>
+
+      <input
+        v-model="settings.admin_whatsapp"
+        class="input"
+      />
+
+      <p class="text-xs text-white/30">
+        gunakan format 628xxxxxxxxxx
+      </p>
+
     </div>
 
-    <CreateUserModal
-      v-model:open="showCreateModal"
-      @created="handleUserCreated"
-    />
+    <button
+      @click="saveSettings"
+      :disabled="loading"
+      class="w-full md:w-auto bg-red-600 hover:bg-red-500 transition px-10 py-4 rounded-xl font-bold uppercase"
+    >
+      {{ loading ? "Menyimpan..." : "Simpan Perubahan" }}
+    </button>
+
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from "vue";
-import { useAuthStore } from "@/stores/auth";
-import CreateUserModal from "@/components/CreateUserModal.vue";
-import { Star, Phone } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-// import { settingsAPI } from "@/api"; // Import API Anda di sini
+import apiClient from "@/api/client";
 
-const auth = useAuthStore();
-const showCreateModal = ref(false);
-const isSaving = ref(false);
+const loading = ref(false);
 
 const settings = ref({
-  min_orders: 0,
-  discount_percent: 0,
+  min_orders: 5,
+  min_spending: 100000,
+  period_days: 30,
+  discount_percent: 10,
   admin_whatsapp: "",
 });
 
 const fetchSettings = async () => {
-  // Tambahkan logic fetch data dari API
-  // const res = await settingsAPI.get();
-  // settings.value = res.data;
-};
-
-const saveSettings = async () => {
-  isSaving.value = true;
   try {
-    // await settingsAPI.update(settings.value);
-    toast.success("Konfigurasi sistem berhasil diperbarui!");
+    const { data } = await apiClient.get(
+      "/orders/loyalty-settings/"
+    );
+
+    settings.value = {
+      ...data,
+      admin_whatsapp:
+        localStorage.getItem("admin_whatsapp") || "",
+    };
   } catch (err) {
-    toast.error("Gagal memperbarui konfigurasi");
-  } finally {
-    isSaving.value = false;
+    console.error(err);
+
+    toast.error("Gagal memuat konfigurasi");
   }
 };
 
-const handleUserCreated = () => {
-  toast.success("Akun baru berhasil dibuat!");
+const saveSettings = async () => {
+  loading.value = true;
+
+  try {
+    await apiClient.put(
+      "/orders/loyalty-settings/",
+      {
+        min_orders: settings.value.min_orders,
+        min_spending: settings.value.min_spending,
+        period_days: settings.value.period_days,
+        discount_percent: settings.value.discount_percent,
+      }
+    );
+
+    localStorage.setItem(
+      "admin_whatsapp",
+      settings.value.admin_whatsapp
+    );
+
+    toast.success("Konfigurasi berhasil disimpan");
+  } catch (err) {
+    console.error(err);
+
+    toast.error("Gagal menyimpan konfigurasi");
+  } finally {
+    loading.value = false;
+  }
 };
 
 onMounted(fetchSettings);
 </script>
+
+<style scoped>
+
+.label{
+    display:block;
+    margin-bottom:10px;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.2em;
+    color:rgba(255,255,255,.45);
+    font-weight:700;
+}
+
+.input{
+    width:100%;
+    background:#151515;
+    border:1px solid rgba(255,255,255,.08);
+    padding:14px 18px;
+    border-radius:14px;
+    color:white;
+    transition:.2s;
+}
+
+.input:focus{
+    outline:none;
+    border-color:#dc2626;
+}
+
+input::-webkit-inner-spin-button,
+input::-webkit-outer-spin-button{
+    -webkit-appearance:none;
+    margin:0;
+}
+
+input[type=number]{
+    -moz-appearance:textfield;
+}
+
+</style>

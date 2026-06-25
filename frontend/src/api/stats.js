@@ -1,10 +1,10 @@
 import apiClient from "./client";
 
 export const statsAPI = {
-  getDashboardSummary: () => apiClient.get("/stats/dashboard/"),
+  getDashboardSummary: () => apiClient.get("/orders/stats/"),
   getLoyalCustomers: (month = null) => {
     const params = month ? { month } : {};
-    return apiClient.get("/stats/loyal-customers/", { params });
+    return apiClient.get("/orders/loyal/", { params });
   },
   getMonthlyStats: (year = null) => {
     const params = year ? { year } : {};

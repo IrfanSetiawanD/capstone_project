@@ -5,15 +5,22 @@ const router = createRouter({
   routes: [
     { path: "/", name: "Home", component: () => import("../pages/Home.vue") },
     {
-      path: "/login",
+      path: "/masashimura-internalakses",
       name: "Login",
       component: () => import("../pages/Login.vue"),
+      meta: { hideNavFooter: true },
     },
     {
       path: "/register",
       name: "Register",
       component: () => import("../pages/Register.vue"),
     },
+    {
+  path: "/checkout",
+  name: "Checkout",
+  component: () => import("../views/customer/Checkout.vue"), // Pastikan file Checkout.vue ada di folder pages
+  meta: { requiresAuth: false } // Pelanggan tidak perlu login untuk checkout
+},
     {
       path: "/menu",
       name: "Menu",
@@ -25,7 +32,7 @@ const router = createRouter({
       component: () => import("../pages/Contact.vue"),
     },
 
-    // Admin Group Routes
+    // 🌟 Admin Group Routes
     {
       path: "/admin",
       component: () => import("../layouts/AdminLayout.vue"),
@@ -44,24 +51,46 @@ const router = createRouter({
         {
           path: "orders",
           name: "ActiveOrders",
-          // Mengarah ke file tabel pesanan yang benar
           component: () => import("../views/admin/ActiveOrders.vue"),
         },
         {
           path: "reports",
           name: "OrderReports",
-          // Mengarah ke file statistik/laporan
-          component: () => import("../pages/OrderReports.vue"),
+          component: () => import("../pages/OrderReports.vue"), // Sesuai kode lo
         },
         {
           path: "pos",
           name: "NewOrder",
-          component: () => import("../pages/NewOrder.vue"),
+          component: () => import("../pages/NewOrder.vue"), // Sesuai kode lo (Tempat kode POS kustom kita)
         },
         {
           path: "customers",
           name: "LoyalCustomers",
-          component: () => import("../pages/LoyalCustomers.vue"),
+          component: () => import("../pages/LoyalCustomers.vue"), // Sesuai kode lo
+        },
+        // 💰 Tambahkan Rute Finansial Baru (AdminFinance.vue) di Folder Views
+        {
+          path: "finance",
+          name: "AdminFinance",
+          component: () => import("../views/admin/AdminFinance.vue"),
+          meta: { roles: ["owner"] },
+        },
+        {
+          path: 'edit-homepage',
+          name: 'EditHomepage',
+          component: () => import("../views/admin/EditHomepage.vue"),
+        },
+        // 👥 Tambahkan Rute Register Staff Baru (Register.vue) di Folder Views
+        {
+          path: "registerinternal",
+          name: "RegisterStaff",
+          component: () => import("../pages/Register.vue"),
+        },
+        // 👤 Tambahkan Rute Profile Baru (UserProfile.vue) di Folder Views
+        {
+          path: "profile",
+          name: "UserProfile",
+          component: () => import("../pages/UserProfile.vue"),
         },
         {
           path: "settings",
@@ -78,7 +107,7 @@ const router = createRouter({
 // Auth Guard
 router.beforeEach((to) => {
   const token = localStorage.getItem("token");
-  const userRole = localStorage.getItem("role");
+  const userRole = localStorage.getItem("role")?.toLowerCase(); // Normalisasi casing agar aman
 
   if (to.matched.some((record) => record.meta.requiresAuth)) {
     if (!token) return { name: "Login" };

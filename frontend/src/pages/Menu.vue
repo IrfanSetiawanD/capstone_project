@@ -1,157 +1,79 @@
 <template>
-  <div class="min-h-screen pt-20 pb-40 bg-[#050505]">
-    <div class="max-w-7xl mx-auto px-6 md:px-12 py-12">
-      <div class="text-center mb-12">
-        <span class="font-caveat text-accent text-2xl mb-4 block"
-          >Menu Kami</span
-        >
-        <h1
-          class="font-oswald text-5xl md:text-6xl font-bold text-white mb-4 uppercase italic tracking-tighter"
-        >
-          Pilih Favoritmu
-        </h1>
-      </div>
+  <div class="min-h-screen pt-28 pb-32 bg-[#050505] text-white font-inter">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8">
 
-      <div class="flex flex-wrap gap-4 mb-8 justify-center">
-        <button
-          v-for="category in categories"
-          :key="category"
-          @click="selectedCategory = category"
-          :class="[
-            'px-6 py-2 rounded-xl font-oswald uppercase tracking-widest text-sm transition-all duration-300 cursor-pointer',
-            selectedCategory === category
-              ? 'bg-primary text-white shadow-[0_4px_20px_rgba(220,38,38,0.3)]'
-              : 'bg-[#0a0a0a] text-white/70 border border-white/10 hover:bg-white/5',
-          ]"
-        >
-          {{ category === "all" ? "Semua" : category }}
-        </button>
-      </div>
-
-      <div v-if="loading" class="text-center py-20">
-        <div
-          class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-primary mr-3"
-        ></div>
-        <p
-          class="text-white/70 font-oswald uppercase tracking-widest inline-block text-sm"
-        >
-          Memuat menu...
+      <div class="text-center mb-16 space-y-3 animate-fade-up">
+        <span class="text-xs font-bold tracking-[0.3em] text-[#DC2626] uppercase font-mono">// Fresh Ingredients</span>
+        <h1 class="font-sora text-4xl md:text-5xl font-extrabold uppercase tracking-tight text-white">Daftar Menu Kuliner</h1>
+        <p class="text-zinc-500 text-xs sm:text-sm max-w-sm mx-auto font-light">
+          Cita rasa premium perpaduan nuansa Jepang dengan kehangatan lokal yang ramah di kantong.
         </p>
       </div>
 
-      <div
-        v-else
-        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12"
-      >
-        <div
-          v-for="menu in filteredMenus"
-          :key="menu.id"
-          class="bg-[#0a0a0a] border border-white/5 rounded-2xl overflow-hidden group hover:border-primary/30 transition-all duration-500"
-        >
-          <div class="w-full aspect-[1147/644] bg-neutral-900 overflow-hidden">
-            <img
-              v-if="menu.image_url"
-              :src="`http://127.0.0.1:8000${menu.image_url}`"
-              class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              alt="menu image"
-            />
-            <div
-              v-else
-              class="w-full h-full flex items-center justify-center text-white/20 text-sm font-light"
-            >
-              No Image
-            </div>
+      <div class="flex flex-wrap gap-3 mb-16 justify-center text-xs font-sora font-bold uppercase tracking-wider">
+        <button v-for="category in categories" :key="category.value"
+          @click="selectedCategory = category.value"
+          :class="['px-6 py-3 rounded-lg border transition-all duration-300 cursor-pointer', 
+          selectedCategory === category.value ? 'bg-[#DC2626] text-white border-[#DC2626] shadow-[0_4px_20px_rgba(220,38,38,0.25)]' : 'bg-[#0F0F0F] text-zinc-400 border-white/5 hover:border-zinc-800 hover:text-white']">
+          {{ category.label }}
+        </button>
+      </div>
+
+      <div v-if="loading" class="text-center py-24 text-zinc-500 font-mono text-xs tracking-widest uppercase">
+        <div class="inline-block animate-spin rounded-full h-5 w-5 border-2 border-[#DC2626] border-t-transparent mr-3 align-middle"></div>
+        Memuat data menu...
+      </div>
+
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
+        <div v-for="menu in filteredMenus" :key="menu.id" 
+          class="bg-[#0F0F0F] border border-white/5 rounded-xl overflow-hidden group hover:border-zinc-800 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between relative">
+          
+          <div v-if="!menu.is_available" class="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm rounded-xl">
+            <span class="font-oswald text-2xl font-bold tracking-widest text-red-500 border border-red-500 px-4 py-2">HABIS</span>
           </div>
 
-          <div class="p-6">
-            <h3
-              class="font-oswald text-xl font-bold text-white mb-2 uppercase tracking-tight"
-            >
-              {{ menu.name }}
-            </h3>
-            <p
-              class="text-white/50 text-sm mb-6 line-clamp-2 font-light leading-relaxed"
-            >
-              {{ menu.description || "Deskripsi menu" }}
-            </p>
+          <div class="w-full aspect-[16/10] bg-zinc-900 overflow-hidden relative border-b border-white/5">
+            <img v-if="menu.image_url" :src="getMediaUrl(menu.image_url)" 
+              class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 pointer-events-none" alt="Menu" />
+            <div v-else class="w-full h-full flex items-center justify-center text-zinc-600 text-xs font-mono uppercase tracking-widest">No Image</div>
+          </div>
 
-            <div class="flex items-end justify-between">
-              <!-- LOGIKA HARGA LOYAL -->
-              <div
-                v-if="authStore.isAuthenticated && cartStore.isLoyal"
-                class="flex flex-col"
-              >
-                <span
-                  class="font-oswald text-2xl font-bold text-red-500 tracking-tighter"
-                >
-                  {{
-                    formatPrice(
-                      menu.price * (1 - cartStore.discountPercent / 100),
-                    )
-                  }}
-                </span>
-                <span class="text-white/30 line-through text-xs font-oswald">
-                  {{ formatPrice(menu.price) }}
-                </span>
-              </div>
+          <div class="p-6 space-y-4 flex-1 flex flex-col justify-between">
+            <div class="space-y-1.5">
+              <h3 class="font-sora text-base font-bold text-white uppercase tracking-wide group-hover:text-[#DC2626] transition-colors">{{ menu.name }}</h3>
+              <p class="text-zinc-500 text-xs font-light line-clamp-2 leading-relaxed">{{ menu.description || "Deskripsi racikan menu andalan spesial Masashimura." }}</p>
+            </div>
 
-              <!-- HARGA NORMAL -->
-              <span
-                v-else
-                class="font-oswald text-2xl font-bold text-primary tracking-tighter"
-              >
-                {{ formatPrice(menu.price) }}
-              </span>
-
-              <button
-                @click="addToCart(menu)"
-                class="bg-primary text-white p-3 rounded-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg cursor-pointer"
-              >
-                <Plus size="20" />
+            <div class="flex items-center justify-between pt-4 border-t border-white/5">
+              <span class="font-mono text-sm font-bold text-amber-500">{{ formatPrice(menu.price) }}</span>
+              <button @click="addToCart(menu)" :disabled="!menu.is_available"
+                class="bg-white/5 hover:bg-[#DC2626] text-white p-3 rounded-lg transition-all duration-300 cursor-pointer border border-white/5 disabled:bg-gray-800 disabled:opacity-50">
+                <Plus size="16" />
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <button
-        v-if="cartStore.cartItemCount > 0"
-        @click="isCartOpen = !isCartOpen"
-        class="fixed bottom-10 right-10 z-50 bg-primary text-white rounded-2xl w-16 h-16 flex items-center justify-center shadow-[0_20px_50px_rgba(220,38,38,0.3)] hover:scale-110 hover:-rotate-6 transition-all duration-300 cursor-pointer"
-      >
-        <ShoppingCart size="28" />
-        <span
-          class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center"
-        >
-          {{ cartStore.cartItemCount }}
-        </span>
+      <button v-if="cartStore.cartItemCount > 0" @click="isCartOpen = true"
+        class="fixed bottom-10 right-10 z-50 bg-[#DC2626] text-white rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_15px_40px_rgba(220,38,38,0.3)] hover:scale-105 transition-all">
+        <ShoppingCart size="22" />
+        <span class="absolute -top-1 -right-1 bg-white text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{{ cartStore.cartItemCount }}</span>
       </button>
 
-      <Cart
-        v-if="isCartOpen"
-        :format-price="formatPrice"
-        @close="isCartOpen = false"
-        @order="handleOrder"
-      />
-      <OrderTypeModal
-        :open="showOrderTypeModal"
-        @confirm="confirmOrder"
-        @cancel="showOrderTypeModal = false"
-      />
+      <Cart v-if="isCartOpen" @close="isCartOpen = false" :format-price="formatPrice" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useCartStore } from "@/stores/cart";
 import { useAuthStore } from "@/stores/auth";
-import { menuAPI, orderAPI } from "@/api";
+import { menuAPI, getMediaUrl } from "@/api";
 import { toast } from "vue-sonner";
 import { ShoppingCart, Plus } from "lucide-vue-next";
-
 import Cart from "@/components/ui/Cart.vue";
-import OrderTypeModal from "@/components/ui/modals/OrderTypeModal.vue";
 
 const cartStore = useCartStore();
 const authStore = useAuthStore();
@@ -159,105 +81,43 @@ const menus = ref([]);
 const loading = ref(true);
 const selectedCategory = ref("all");
 const isCartOpen = ref(false);
-const showOrderTypeModal = ref(false);
 
-const categories = ["all", "Makanan", "Minuman", "Snacks"];
+const categories = [
+  { label: "Semua", value: "all" },
+  { label: "Main Menu", value: "Makanan" },
+  { label: "Dimsum & Cemilan", value: "Snacks" },
+  { label: "Minuman Signature", value: "Minuman" },
+];
 
 const fetchMenus = async () => {
   try {
     loading.value = true;
-    const categoryParam =
-      selectedCategory.value === "all" ? null : selectedCategory.value;
-    const response = await menuAPI.getAll(categoryParam);
+    const response = await menuAPI.getAll();
     menus.value = response.data || [];
   } catch (error) {
-    console.error(error);
-    toast.error("Gagal memuat menu");
+    toast.error("Gagal memuat daftar menu.");
   } finally {
     loading.value = false;
   }
 };
 
 const filteredMenus = computed(() => {
-  if (selectedCategory.value === "all") return menus.value;
-  return menus.value.filter((menu) => menu.category === selectedCategory.value);
+  let list = selectedCategory.value === "all" ? menus.value : menus.value.filter(m => m.category === selectedCategory.value);
+  return list.sort((a, b) => b.is_available - a.is_available);
 });
 
 const addToCart = (menu) => {
+  if (!menu.is_available) return toast.error("Menu ini sedang habis!");
   cartStore.addToCart(menu);
-  toast.success(`${menu.name} masuk keranjang!`);
+  toast.success(`${menu.name} ditambahkan ke keranjang!`);
 };
 
-const handleOrder = () => {
-  if (cartStore.isEmpty) {
-    toast.error("Keranjang kosong!");
-    return;
-  }
-  showOrderTypeModal.value = true;
-};
+const formatPrice = (p) => new Intl.NumberFormat("id-ID", { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(p);
 
-const confirmOrder = async (data) => {
-  const { orderType, paymentMethod, customerPhone } = data;
-  try {
-    const payload = {
-      phone: customerPhone,
-      payment_method: paymentMethod,
-      order_type: orderType,
-      total_price: cartStore.totalPrice,
-      items: Object.values(cartStore.cart).map((item) => ({
-        menu_id: item.id,
-        quantity: item.quantity,
-      })),
-    };
-
-    const response = await orderAPI.create(payload);
-
-    if (response.status === 201 || response.status === 200) {
-      const orderItemsText = Object.values(cartStore.cart)
-        .map((item) => `• ${item.name} x${item.quantity}`)
-        .join("%0A");
-
-      const message =
-        `*PESANAN MASASHIMURA*%0A` +
-        `--------------------------%0A` +
-        `Tipe: ${orderType === "dine-in" ? "Makan di Tempat" : "Bawa Pulang"}%0A` +
-        `Pembayaran: ${paymentMethod.toUpperCase()}%0A%0A` +
-        `*Pesanan:*%0A${orderItemsText}%0A%0A` +
-        `*Total: Rp ${cartStore.totalPrice.toLocaleString("id-ID")}*%0A` +
-        `--------------------------%0A` +
-        `_Terima kasih!_`;
-
-      window.open(`https://wa.me/6285773615870?text=${message}`, "_blank");
-      toast.success("Pesanan berhasil dikirim ke WhatsApp!");
-
-      showOrderTypeModal.value = false;
-      isCartOpen.value = false;
-      cartStore.clearCart();
-    }
-  } catch (error) {
-    console.error("Error Detail:", error.response?.data);
-    toast.error(
-      "Gagal mengirim pesanan: " +
-        (error.response?.data?.detail || "Cek konsol"),
-    );
-  }
-};
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(price);
-};
-
-onMounted(async () => {
-  await fetchMenus();
-  // Inisialisasi status loyalitas jika user sudah login
-  if (authStore.isAuthenticated && authStore.user?.phone) {
-    await cartStore.checkLoyalty(authStore.user.phone);
-  }
-});
-
-watch(selectedCategory, fetchMenus);
+onMounted(fetchMenus);
 </script>
+
+<style scoped>
+.animate-fade-up { animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+</style>

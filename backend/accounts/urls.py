@@ -1,8 +1,11 @@
 # accounts/urls.py
 from django.urls import path
-from .views import CustomAuthToken, create_user_view
+from .views import LoginView, create_user_view, ChangePasswordView, UpdateUsernameView, UserProfileUpdateView
 
 urlpatterns = [
-    path('login/', CustomAuthToken.as_view(), name='api-login'),
-    path('users/create/', create_user_view, name='api-create-user'), # URL pas dengan userAPI.createUser di FE
+    path('login/', LoginView.as_view(), name='api-login'),
+    path('users/create/', create_user_view, name='api-create-user'),
+    path('profile/update/', UserProfileUpdateView.as_view(), name='api-profile-update'),
+    path('profile/change-password/', ChangePasswordView.as_view(), name='api-change-password'),
+    path('profile/update-username/', UpdateUsernameView.as_view(), name='api-update-username'),
 ]

@@ -1,11 +1,14 @@
 <template>
-  <div class="min-h-screen bg-[#050505]">
-    <template v-if="!isAdminRoute">
+  <div class="min-h-screen bg-[#050505] font-manrope">
+    <!-- 🟢 Halaman Publik (Muncul Navbar & Footer) -->
+    <!-- Logika: Jika BUKAN rute admin DAN BUKAN rute yang disembunyikan metanya -->
+    <template v-if="!isAdminRoute && !route.meta.hideNavFooter">
       <Navbar />
       <router-view />
       <Footer />
     </template>
 
+    <!-- 🔒 Halaman Internal Area / Login / Register (Tanpa Navbar & Footer Publik) -->
     <template v-else>
       <router-view />
     </template>
@@ -19,7 +22,7 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { Toaster } from "vue-sonner";
 
-// Pastikan path import merujuk langsung ke file .vue, bukan index.js
+// Pastikan path import merujuk langsung ke file .vue
 import Navbar from "@/components/ui/layouts/Navbar.vue";
 import Footer from "@/components/ui/layouts/Footer.vue";
 

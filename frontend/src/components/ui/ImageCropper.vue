@@ -5,12 +5,13 @@
       @click.stop
     >
       <div
-        class="w-full max-w-2xl bg-[#121212] p-6 rounded-lg border border-white/10 shadow-2xl"
+        class="w-full max-w-2xl bg-[#121212] p-6 rounded-lg border border-white/10 shadow-2xl font-inter"
       >
+        <!-- Judul dinamis menyesuaikan tipe -->
         <h3
-          class="text-white text-center mb-4 font-oswald uppercase tracking-widest text-amber-500"
+          class="text-center mb-4 font-oswald uppercase tracking-widest text-amber-500 text-sm"
         >
-          Potong Foto Menu (1147 × 644)
+          Potong Foto {{ cropLabel }} ({{ ratioLabel }} • Output {{ targetResolution.width }} × {{ targetResolution.height }})
         </h3>
 
         <div
@@ -20,24 +21,34 @@
             ref="cropperRef"
             class="h-full w-full"
             :src="image"
-            :stencil-props="{ aspectRatio: 1147 / 644 }"
+            :stencil-props="{ aspectRatio: currentAspectRatio }"
           />
+
+          <!-- Overlay loading saat proses resize/generate canvas -->
+          <div
+            v-if="isGenerating"
+            class="absolute inset-0 bg-black/70 flex items-center justify-center"
+          >
+            <div class="animate-spin w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full"></div>
+          </div>
         </div>
 
         <div class="mt-6 flex gap-4">
           <button
             type="button"
             @click="onCancel"
-            class="flex-1 py-3 bg-white/10 text-white uppercase text-xs font-bold rounded hover:bg-white/20 transition-all"
+            :disabled="isGenerating"
+            class="flex-1 py-3 bg-white/10 text-white uppercase text-xs font-bold rounded hover:bg-white/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Batal
           </button>
           <button
             type="button"
             @click="handleGenerate"
-            class="flex-[2] py-3 bg-amber-600 text-black uppercase text-xs font-bold rounded hover:bg-amber-500 transition-all"
+            :disabled="isGenerating"
+            class="flex-[2] py-3 bg-amber-600 text-black uppercase text-xs font-bold rounded hover:bg-amber-500 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Simpan Potongan
+            {{ isGenerating ? "Memproses..." : "Simpan Potongan" }}
           </button>
         </div>
       </div>
@@ -46,38 +57,99 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { Cropper } from "vue-advanced-cropper";
 import "vue-advanced-cropper/dist/style.css";
 
-const props = defineProps({ image: String });
+const props = defineProps({
+  image: String,
+  type: {
+    type: String,
+    default: "menu", // Pilihan: 'menu', 'hero', 'gallery', 'about'
+  },
+});
+
 const emit = defineEmits(["crop-complete", "cancel"]);
 const cropperRef = ref(null);
+const isGenerating = ref(false);
 
+// Resolusi output & rasio dihitung otomatis berdasarkan tipe foto.
+// PENTING: rasio di sini harus selalu sinkron dengan label tombol upload
+// di halaman pemanggil (mis. EditHomepage.vue) dan class aspect-* pada
+// preview/tampilan akhirnya (EditHomepage.vue & Home.vue).
+const targetResolution = computed(() => {
+  switch (props.type) {
+    case "hero":
+      return { width: 1920, height: 1080 }; // Banner lanskap hero — 16:9
+    case "gallery":
+      return { width: 800, height: 800 }; // Galeri outlet — 1:1
+    case "about":
+      return { width: 1000, height: 1000 }; // Foto tentang kedai — 1:1
+    case "menu":
+    default:
+      return { width: 1147, height: 644 }; // Foto menu makanan/minuman — ~16:9
+  }
+});
+
+const currentAspectRatio = computed(() => {
+  const { width, height } = targetResolution.value;
+  return width / height;
+});
+
+// Label rasio yang ditampilkan, dijaga konsisten dengan targetResolution
+// supaya tidak ada lagi mismatch seperti sebelumnya (label "4:3" vs output 1:1).
+const ratioLabel = computed(() => {
+  const { width, height } = targetResolution.value;
+  const divisor = gcd(width, height);
+  return `${width / divisor}:${height / divisor}`;
+});
+
+const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+
+const cropLabel = computed(() => {
+  if (props.type === "hero") return "Hero Banner Website";
+  if (props.type === "gallery") return "Gallery Outlet";
+  if (props.type === "about") return "Tentang Toko";
+  return "Menu Makanan/Minuman";
+});
+
+/**
+ * Ambil hasil crop dari cropper, resize ke resolusi target, lalu emit sebagai blob JPEG.
+ * Dibungkus state isGenerating agar tombol tidak bisa diklik dobel selama proses berjalan.
+ */
 const handleGenerate = () => {
-  if (!cropperRef.value) return;
+  if (!cropperRef.value || isGenerating.value) return;
+
+  isGenerating.value = true;
 
   const { canvas } = cropperRef.value.getResult();
-  if (canvas) {
-    const resized = document.createElement("canvas");
-    resized.width = 1147;
-    resized.height = 644;
-    const ctx = resized.getContext("2d");
-
-    // Gunakan smoothing agar kualitas tetap terjaga saat resize
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(canvas, 0, 0, 1147, 644);
-
-    resized.toBlob(
-      (blob) => {
-        if (blob) emit("crop-complete", blob);
-      },
-      "image/jpeg",
-      0.92,
-    );
+  if (!canvas) {
+    isGenerating.value = false;
+    return;
   }
+
+  const { width, height } = targetResolution.value;
+  const resized = document.createElement("canvas");
+  resized.width = width;
+  resized.height = height;
+  const ctx = resized.getContext("2d");
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(canvas, 0, 0, width, height);
+
+  resized.toBlob(
+    (blob) => {
+      isGenerating.value = false;
+      if (blob) emit("crop-complete", blob);
+    },
+    "image/jpeg",
+    0.92,
+  );
 };
 
-const onCancel = () => emit("cancel");
+const onCancel = () => {
+  if (isGenerating.value) return;
+  emit("cancel");
+};
 </script>
