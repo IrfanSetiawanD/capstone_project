@@ -20,6 +20,8 @@ from .views import (
     finance_monthly_summary,
     finance_daily_summary,
 )
+from .finance_excel import export_finance_excel_view
+from .finance_pdf import export_finance_pdf_view
 
 app_name = "orders"
 
@@ -48,6 +50,8 @@ urlpatterns = [
     path("orders/export_pdf_report/",              export_pdf_report,            name="export-pdf"),
     path("orders/finance/monthly/", finance_monthly_summary, name="finance-monthly"),
     path("orders/finance/daily/",   finance_daily_summary,   name="finance-daily"),
+    path("orders/export/finance-excel/", export_finance_excel_view, name="finance-export-excel"),
+    path("orders/export/finance-pdf/", export_finance_pdf_view, name="finance-export-pdf"),
 
     # ── Tagihan belum lunas & riwayat ─────────────────────────────────────────
     path("orders/unpaid/",   unpaid_orders, name="unpaid-orders"),

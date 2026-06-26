@@ -1,3 +1,14 @@
+"""
+orders/views.py
+===============
+Semua view untuk modul Orders:
+  - CRUD Order
+  - Loyalty (publik & admin)
+  - Reports & Dashboard
+  - Export Excel & PDF (menggunakan finance_excel.py & finance_pdf.py)
+  - Unpaid Orders & History
+"""
+
 from django.db import transaction, models
 from django.db.models import Count, Sum, Max
 from django.http import HttpResponse
@@ -6,6 +17,12 @@ from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
 from django.db.models import Q
+import math
+import calendar
+import datetime
+
+# Finance app
+from finance.models import Expense
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAdminUser
@@ -31,9 +48,6 @@ def create_order(request):
     if not items_data:
         return Response({"error": "Items kosong"}, status=400)
 
-    # Mendukung dua format payload:
-    #   1. { customer: { phone, name }, ... }   ← format Checkout.vue (web)
-    #   2. { customer_phone, customer_name, ... } ← format flat (POS)
     customer_data = data.get('customer') or {}
     phone = (customer_data.get('phone') or data.get('customer_phone', '')).strip()
     name  = (customer_data.get('name')  or data.get('customer_name',  '')).strip()
@@ -45,36 +59,47 @@ def create_order(request):
 
     raw_payment_status = data.get('payment_status', '')
 
+    # FIX: logika payment_status lebih eksplisit & konsisten
     if source == 'web':
+        # Web order selalu pending — belum dikonfirmasi kasir
         payment_status = 'pending'
         is_deferred    = False
+        order_status   = 'pending'
     elif raw_payment_status == 'pending':
-        # POS: "Makan Dulu" — bayar nanti
+        # POS "Makan Dulu" — bayar nanti
         payment_status = 'unpaid'
         is_deferred    = True
+        order_status   = 'pending'
     else:
-        # POS: bayar sekarang
+        # POS bayar langsung
         payment_status = 'paid'
         is_deferred    = False
+        order_status   = 'completed'
 
     processed_items = []
     for item_data in items_data:
         menu_obj = get_object_or_404(Menu, id=item_data.get('menu_id'))
         if not menu_obj.is_available:
             return Response(
-                {"error": f"Menu '{menu_obj.name}' sedang tidak tersedia"},
+                {"error": f"Menu '{menu_obj.name}' tidak tersedia"},
                 status=400,
             )
+
+        price = item_data.get('price') or menu_obj.price
+        if source == 'web':
+            # Markup 1% dan dibulatkan ke 500 terdekat untuk web order
+            price = math.ceil((float(price) * 1.01) / 500) * 500
+
         processed_items.append({
             "menu":  menu_obj,
             "qty":   int(item_data.get('quantity', 1)),
-            "price": item_data.get('price') or menu_obj.price,
+            "price": price,
             "notes": item_data.get('notes', ''),
         })
 
     order = Order.objects.create(
         source              = source,
-        status              = 'pending',
+        status              = order_status,   # FIX: pakai order_status yang sudah ditentukan
         payment_status      = payment_status,
         payment_method      = payment_method,
         is_deferred_payment = is_deferred,
@@ -96,7 +121,6 @@ def create_order(request):
     ])
 
     order.recalculate_totals()
-
     if phone:
         order.apply_loyalty_discount()
 
@@ -159,8 +183,8 @@ def check_loyalty_status(request):
     phone = request.query_params.get("phone", "").strip()
     if not phone:
         return Response({
-            "is_loyal": False,
-            "discount_percent": 0,
+            "is_loyal":            False,
+            "discount_percent":    0,
             "discount_percentage": 0,
         })
 
@@ -271,7 +295,10 @@ class DashboardStatsView(APIView):
 
     def get(self, request):
         # Hanya order yang sudah LUNAS (payment_status=paid) untuk revenue
-        paid_orders = Order.objects.filter(payment_status='paid')
+        # FIX: exclude order yang dibatalkan (status='cancelled') dari hitungan
+        paid_orders = Order.objects.filter(
+            payment_status='paid',
+        ).exclude(status='cancelled')
 
         paid_stats = paid_orders.aggregate(
             total_revenue = Sum("total_price"),
@@ -281,11 +308,13 @@ class DashboardStatsView(APIView):
         pending   = Order.objects.filter(status="pending").count()
         completed = Order.objects.filter(status="completed").count()
 
-        # Top 5 menu: hanya dari order yang sudah paid
-        # Sertakan total_qty (jumlah porsi) dan total_revenue (omzet per menu)
+        # Top 5 menu: hanya dari order paid & tidak cancelled
         top_menus = (
             OrderItem.objects
-            .filter(order__payment_status='paid')
+            .filter(
+                order__payment_status='paid',
+            )
+            .exclude(order__status='cancelled')
             .values("menu__name")
             .annotate(
                 total_qty     = Sum("quantity"),
@@ -334,28 +363,22 @@ class DashboardStatsView(APIView):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def admin_dashboard_daily_stats(request):
-    from expenses.models import Expense
-
     target_date = request.query_params.get("target_date")
 
-    revenue = 0
-    if target_date:
-        revenue = (
-            Order.objects
-            .filter(
-                created_at__date=target_date,
-                payment_status='paid',          # ← HANYA YANG SUDAH LUNAS
-            )
-            .aggregate(total=Sum("total_price"))["total"] or 0
-        )
-
+    revenue        = 0
     expenses_total = 0
+
     if target_date:
-        expenses_total = (
-            Expense.objects
-            .filter(date=target_date)
-            .aggregate(total=Sum("amount"))["total"] or 0
-        )
+        revenue = Order.objects.filter(
+            created_at__date=target_date,
+            payment_status='paid',
+        ).exclude(status='cancelled').aggregate(
+            total=Sum("total_price")
+        )["total"] or 0
+
+        expenses_total = Expense.objects.filter(
+            date=target_date
+        ).aggregate(total=Sum("amount"))["total"] or 0
 
     return Response({
         "revenue":    revenue,
@@ -363,24 +386,19 @@ def admin_dashboard_daily_stats(request):
         "net_profit": revenue - expenses_total,
     })
 
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def finance_monthly_summary(request):
-    """
-    GET /api/orders/finance/monthly/?year=2026
-    Mengembalikan pendapatan & pengeluaran per bulan dalam satu tahun.
-    """
-    from expenses.models import Expense
-    from django.db.models import Sum
-    from django.db.models.functions import TruncMonth
-    import calendar
+    from django.db.models.functions import TruncMonth, ExtractMonth
 
     year = int(request.query_params.get("year", timezone.now().year))
 
-    # Revenue per bulan (paid only)
+    # Revenue per bulan (paid only, exclude cancelled)
     revenue_qs = (
         Order.objects
         .filter(created_at__year=year, payment_status='paid')
+        .exclude(status='cancelled')
         .annotate(month=TruncMonth('created_at'))
         .values('month')
         .annotate(total=Sum('total_price'))
@@ -388,18 +406,7 @@ def finance_monthly_summary(request):
     )
     revenue_map = {r['month'].month: r['total'] for r in revenue_qs}
 
-    # Expense per bulan
-    expense_qs = (
-        Expense.objects
-        .filter(date__year=year)
-        .values(month=models.ExpressionWrapper(
-            models.Func('date', function='MONTH'),
-            output_field=models.IntegerField()
-        ))
-        .annotate(total=Sum('amount'))
-    )
-    # Alternatif yang lebih portable (Django ORM):
-    from django.db.models.functions import ExtractMonth
+    # FIX: hapus query expense_qs duplikat, pakai ExtractMonth langsung
     expense_qs = (
         Expense.objects
         .filter(date__year=year)
@@ -414,11 +421,11 @@ def finance_monthly_summary(request):
         rev = revenue_map.get(m, 0)
         exp = expense_map.get(m, 0)
         result.append({
-            "month":       m,
-            "month_name":  calendar.month_name[m],
-            "revenue":     rev,
-            "expenses":    exp,
-            "net_profit":  rev - exp,
+            "month":      m,
+            "month_name": calendar.month_name[m],
+            "revenue":    rev,
+            "expenses":   exp,
+            "net_profit": rev - exp,
         })
 
     return Response({"year": year, "data": result})
@@ -431,17 +438,20 @@ def finance_daily_summary(request):
     GET /api/orders/finance/daily/?year=2026&month=6
     Mengembalikan pendapatan & pengeluaran per hari dalam satu bulan.
     """
-    from expenses.models import Expense
     from django.db.models.functions import TruncDate
-    import calendar
 
     year  = int(request.query_params.get("year",  timezone.now().year))
     month = int(request.query_params.get("month", timezone.now().month))
 
-    # Revenue per hari (paid only)
+    # Revenue per hari (paid only, exclude cancelled)
     revenue_qs = (
         Order.objects
-        .filter(created_at__year=year, created_at__month=month, payment_status='paid')
+        .filter(
+            created_at__year=year,
+            created_at__month=month,
+            payment_status='paid',
+        )
+        .exclude(status='cancelled')
         .annotate(day=TruncDate('created_at'))
         .values('day')
         .annotate(total=Sum('total_price'))
@@ -458,8 +468,6 @@ def finance_daily_summary(request):
     )
     expense_map = {str(e['date']): e['total'] for e in expense_qs}
 
-    # Isi semua hari dalam bulan tersebut
-    import datetime
     days_in_month = calendar.monthrange(year, month)[1]
     result = []
     for d in range(1, days_in_month + 1):
@@ -484,102 +492,30 @@ def finance_daily_summary(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def export_excel_report(request):
-    import openpyxl
-    from openpyxl.utils import get_column_letter
+    """
+    GET /api/orders/export/finance-excel/?mode=monthly&month=7&year=2026
+    GET /api/orders/export/finance-excel/?mode=yearly&year=2026
 
-    month = request.query_params.get("month")
-    year  = request.query_params.get("year")
-
-    qs = Order.objects.all()
-    if month and year:
-        qs = qs.filter(created_at__month=month, created_at__year=year)
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Laporan Pesanan"
-    ws.append([
-        "No. Order", "Tanggal", "Source",
-        "Pelanggan", "Telepon",
-        "Subtotal", "Diskon", "Total",
-        "Status", "Pembayaran", "Metode",
-    ])
-
-    for order in qs.order_by('-created_at'):
-        ws.append([
-            order.order_number,
-            order.created_at.strftime("%Y-%m-%d %H:%M"),
-            order.get_source_display(),
-            order.customer_name,
-            order.customer_phone,
-            float(order.subtotal),
-            float(order.discount_amount),
-            float(order.total_price),
-            order.status,
-            order.payment_status,
-            order.payment_method or '',
-        ])
-
-    for i in range(1, 12):
-        ws.column_dimensions[get_column_letter(i)].width = 18
-
-    response = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    response["Content-Disposition"] = (
-        f'attachment; filename="laporan-{month or "all"}-{year or "all"}.xlsx"'
-    )
-    wb.save(response)
-    return response
+    FIX: redirect ke finance_excel.py yang sudah berfitur lengkap
+    (template branded, cover, rekap, top menu, pengeluaran).
+    Query param lama ?month=&year= tetap didukung (diperlakukan sebagai mode=monthly).
+    """
+    from .finance_excel import export_finance_excel_view
+    return export_finance_excel_view(request)
 
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def export_pdf_report(request):
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
+    """
+    GET /api/orders/export/finance-pdf/?mode=monthly&month=7&year=2026
+    GET /api/orders/export/finance-pdf/?mode=yearly&year=2026
 
-    month = request.query_params.get("month")
-    year  = request.query_params.get("year")
-
-    qs = Order.objects.all()
-    if month and year:
-        qs = qs.filter(created_at__month=month, created_at__year=year)
-
-    response = HttpResponse(content_type="application/pdf")
-    response["Content-Disposition"] = (
-        f'attachment; filename="laporan-{month or "all"}-{year or "all"}.pdf"'
-    )
-
-    p = canvas.Canvas(response, pagesize=A4)
-    width, height = A4
-    y = height - 50
-
-    p.setFont("Helvetica-Bold", 14)
-    p.drawString(40, y, f"Laporan Pesanan — {month or 'Semua'}/{year or 'Semua'}")
-    y -= 30
-
-    p.setFont("Helvetica-Bold", 9)
-    p.drawString(40, y, "No. Order          Tanggal       Telepon          Total        Status")
-    y -= 16
-
-    p.setFont("Helvetica", 9)
-    for order in qs.order_by('-created_at'):
-        if y < 50:
-            p.showPage()
-            y = height - 50
-            p.setFont("Helvetica", 9)
-        line = (
-            f"{order.order_number:<20} "
-            f"{order.created_at.strftime('%d-%m-%Y'):<14} "
-            f"{order.customer_phone:<18} "
-            f"Rp{order.total_price:>12,.0f}   "
-            f"{order.status}"
-        )
-        p.drawString(40, y, line)
-        y -= 16
-
-    p.save()
-    return response
+    FIX: redirect ke finance_pdf.py yang sudah berfitur lengkap
+    (cover halaman, KPI cards, tanda tangan, dsb.).
+    """
+    from .finance_pdf import export_finance_pdf_view
+    return export_finance_pdf_view(request)
 
 
 # ─────────────────────────────────────────────
@@ -622,7 +558,9 @@ class LoyalCustomersView(APIView):
 
         overrides = {
             cl.phone: cl.special_discount_percentage
-            for cl in CustomerLoyalty.objects.exclude(special_discount_percentage__isnull=True)
+            for cl in CustomerLoyalty.objects.exclude(
+                special_discount_percentage__isnull=True
+            )
         }
 
         customers = []
@@ -684,8 +622,8 @@ def unpaid_orders(request):
     search = request.query_params.get("search", "")
 
     # Tangkap semua order yang belum lunas:
-    #   'unpaid'  -> POS "Makan Dulu" (is_deferred_payment=True)
-    #   'pending' -> Web checkout cash (belum dikonfirmasi kasir)
+    #   'unpaid'  → POS "Makan Dulu" (is_deferred_payment=True)
+    #   'pending' → Web checkout / belum dikonfirmasi kasir
     qs = (
         Order.objects
         .filter(payment_status__in=["unpaid", "pending"])
@@ -709,14 +647,22 @@ def unpaid_orders(request):
 def pay_order(request, pk):
     order = get_object_or_404(Order, pk=pk)
 
-    # Simpan status sebelumnya untuk trigger signal loyalty
-    order._previous_status = order.status
+    # FIX: simpan status sebelumnya SEBELUM diubah supaya signal loyalty bisa
+    # membandingkan previous vs new. Gunakan field private yang dicek di signal.
+    previous_status = order.status
 
     order.payment_status = "paid"
     order.status         = "completed"
-    # Pertahankan payment_method lama jika frontend tidak kirim yang baru
-    order.payment_method = request.data.get("payment_method") or order.payment_method or "cash"
+    order.payment_method = (
+        request.data.get("payment_method") or order.payment_method or "cash"
+    )
+    # FIX: set _previous_status setelah update field, sebelum save,
+    # agar signal post_save bisa mengaksesnya
+    order._previous_status = previous_status
     order.save()
+
+    # FIX: refresh untuk memastikan data yang dikembalikan sinkron dengan DB
+    order.refresh_from_db()
 
     return Response({
         "success":      True,
@@ -727,6 +673,14 @@ def pay_order(request, pk):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def order_history(request):
+    """
+    GET /api/orders/history/?period=today|week|month
+    GET /api/orders/history/?period=month&year=2026&month=6  ← filter spesifik
+
+    FIX: filter 'month' sebelumnya pakai timedelta(days=30) yang tidak akurat.
+    Sekarang filter by year+month yang tepat, dengan fallback ke 30 hari terakhir
+    jika year/month tidak disertakan.
+    """
     period = request.query_params.get("period", "today")
     now    = timezone.now()
 
@@ -734,10 +688,23 @@ def order_history(request):
 
     if period == "today":
         qs = qs.filter(created_at__date=now.date())
+
     elif period == "week":
         qs = qs.filter(created_at__gte=now - timedelta(days=7))
+
     elif period == "month":
-        qs = qs.filter(created_at__gte=now - timedelta(days=30))
+        # FIX: gunakan year & month dari query param jika ada,
+        # fallback ke bulan & tahun sekarang
+        year  = request.query_params.get("year",  now.year)
+        month = request.query_params.get("month", now.month)
+        qs    = qs.filter(
+            created_at__year=int(year),
+            created_at__month=int(month),
+        )
+
+    elif period == "year":
+        year = request.query_params.get("year", now.year)
+        qs   = qs.filter(created_at__year=int(year))
 
     return Response(
         OrderSerializer(qs.order_by("-created_at"), many=True).data

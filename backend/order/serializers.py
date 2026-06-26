@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Order, OrderItem, LoyaltySettings, Menu, Category
+from .models import Order, OrderItem, LoyaltySettings
+from menu.models import Menu, Category
 import math
 
 class MenuSerializer(serializers.ModelSerializer):

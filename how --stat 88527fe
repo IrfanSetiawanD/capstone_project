@@ -1,0 +1,5 @@
+[33m88527fe[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfrontend-ui[m[33m)[m HEAD@{0}: rebase (abort): returning to refs/heads/frontend-ui
+[33mf1efef6[m[33m ([m[1;31morigin/frontend-ui[m[33m)[m HEAD@{1}: pull origin frontend-ui --rebase (start): checkout f1efef6911ab45dda3cd591eab6945c495c85fc7
+[33m88527fe[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfrontend-ui[m[33m)[m HEAD@{2}: commit: modified order
+[33m0bbd83b[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{3}: checkout: moving from main to frontend-ui
+[33m0bbd83b[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{4}: clone: from https://github.com/IrfanSetiawanD/capstone_project.git

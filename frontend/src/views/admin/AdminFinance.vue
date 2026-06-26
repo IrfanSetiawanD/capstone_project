@@ -34,7 +34,7 @@
       <button @click="changeDate(1)" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition">Besok ▶️</button>
     </div>
 
-    <!-- NAVIGASI BULAN (untuk tampilan harian per bulan) -->
+    <!-- NAVIGASI BULAN -->
     <div v-if="viewMode === 'monthly'" class="flex flex-wrap items-center gap-3">
       <div class="flex items-center gap-2 bg-[#0a0a0a] border border-white/5 p-1.5 rounded-2xl">
         <button @click="changeMonth(-1)" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition">◀️</button>
@@ -47,7 +47,7 @@
       </select>
     </div>
 
-    <!-- NAVIGASI TAHUN (untuk tampilan bulanan per tahun) -->
+    <!-- NAVIGASI TAHUN -->
     <div v-if="viewMode === 'yearly'" class="flex items-center gap-3">
       <div class="flex items-center gap-2 bg-[#0a0a0a] border border-white/5 p-1.5 rounded-2xl">
         <button @click="changeYear(-1)" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition">◀️</button>
@@ -87,7 +87,9 @@
       </div>
     </div>
 
-    <!-- GRAFIK + TABEL (mode harian per tanggal) -->
+    <!-- ═══════════════════════════════════════════════
+         MODE HARIAN
+    ════════════════════════════════════════════════ -->
     <div v-if="viewMode === 'daily'" class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
       <!-- FORM INPUT PENGELUARAN -->
@@ -114,31 +116,77 @@
         </form>
       </div>
 
-      <!-- DOKUMEN + LOG PENGELUARAN -->
+      <!-- LOG PENGELUARAN + EXPORT PANEL -->
       <div class="lg:col-span-2 space-y-4 w-full">
-        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-[#0a0a0a] border border-white/5 p-4 rounded-2xl shadow-lg">
-          <div class="text-xs">
-            <h4 class="font-bold text-white uppercase tracking-wide">Export Dokumen</h4>
-            <p class="text-white/30 text-[11px]">Rekap transaksi database (bulanan / tahunan)</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="flex gap-1">
-              <select v-model.number="exportMonth"
-                class="bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-red-600">
-                <option v-for="(name, idx) in monthNames" :key="idx" :value="idx + 1">{{ name }}</option>
-              </select>
-              <select v-model.number="exportYear"
-                class="bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-red-600">
-                <option v-for="y in yearsAvailable" :key="y" :value="y">{{ y }}</option>
-              </select>
+
+        <!-- ── EXPORT PANEL ── -->
+        <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-bold text-sm text-white uppercase tracking-wide font-oswald">Export Dokumen</h4>
+              <p class="text-[11px] text-white/30 mt-0.5">Pilih periode & format yang diinginkan</p>
             </div>
-            <button @click="exportDocument('excel')"
-              class="px-4 py-2.5 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-400 uppercase tracking-wider transition">
-              📥 Excel
+            <!-- Toggle mode export -->
+            <div class="flex items-center gap-1 bg-black/30 p-1 rounded-xl">
+              <button
+                @click="exportMode = 'monthly'"
+                class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition"
+                :class="exportMode === 'monthly' ? 'bg-red-600 text-white' : 'text-white/40 hover:text-white/60'"
+              >
+                Bulanan
+              </button>
+              <button
+                @click="exportMode = 'yearly'"
+                class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition"
+                :class="exportMode === 'yearly' ? 'bg-red-600 text-white' : 'text-white/40 hover:text-white/60'"
+              >
+                Tahunan
+              </button>
+            </div>
+          </div>
+
+          <!-- Pilihan periode -->
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Bulan (hanya tampil kalau mode monthly) -->
+            <select
+              v-if="exportMode === 'monthly'"
+              v-model.number="exportMonth"
+              class="bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-red-600 transition flex-1 min-w-[120px]"
+            >
+              <option v-for="(name, idx) in monthNames" :key="idx" :value="idx + 1">{{ name }}</option>
+            </select>
+
+            <!-- Tahun -->
+            <select
+              v-model.number="exportYear"
+              class="bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-red-600 transition flex-1 min-w-[90px]"
+            >
+              <option v-for="y in yearsAvailable" :key="y" :value="y">{{ y }}</option>
+            </select>
+
+            <!-- Label preview periode -->
+            <div class="text-[10px] text-white/30 font-mono bg-white/5 px-3 py-2 rounded-xl">
+              {{ exportMode === 'monthly' ? `${monthNames[exportMonth - 1]} ${exportYear}` : `Tahun ${exportYear}` }}
+            </div>
+          </div>
+
+          <!-- Tombol export -->
+          <div class="flex gap-2">
+            <button
+              @click="exportDocument('excel')"
+              :disabled="isExporting"
+              class="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-400 uppercase tracking-wider transition disabled:opacity-40"
+            >
+              <span>📥</span>
+              <span>{{ isExporting ? 'Mengunduh...' : 'Excel' }}</span>
             </button>
-            <button @click="exportDocument('pdf')"
-              class="px-4 py-2.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-xl text-xs font-bold text-red-500 uppercase tracking-wider transition">
-              📄 PDF
+            <button
+              @click="exportDocument('pdf')"
+              :disabled="isExporting"
+              class="flex-1 flex items-center justify-center gap-2 py-3 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-xl text-xs font-bold text-red-500 uppercase tracking-wider transition disabled:opacity-40"
+            >
+              <span>📄</span>
+              <span>{{ isExporting ? 'Mengunduh...' : 'PDF' }}</span>
             </button>
           </div>
         </div>
@@ -177,7 +225,9 @@
       </div>
     </div>
 
-    <!-- GRAFIK BULANAN (per hari dalam 1 bulan) -->
+    <!-- ═══════════════════════════════════════════════
+         MODE BULANAN
+    ════════════════════════════════════════════════ -->
     <div v-if="viewMode === 'monthly'" class="space-y-6">
       <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 space-y-4">
         <h3 class="font-oswald text-xs uppercase tracking-widest text-white/40">
@@ -187,7 +237,6 @@
         <div v-if="isLoadingChart" class="text-center py-12 text-white/30 text-xs animate-pulse">Memuat data grafik...</div>
 
         <div v-else class="space-y-2">
-          <!-- Bar Chart Sederhana -->
           <div class="flex items-end gap-1 h-40 overflow-x-auto pb-2">
             <div
               v-for="d in monthlyData"
@@ -195,11 +244,9 @@
               class="flex flex-col items-center gap-1 min-w-[28px] flex-1"
               :title="`${d.date}\nPendapatan: Rp ${formatNumber(d.revenue)}\nPengeluaran: Rp ${formatNumber(d.expenses)}\nLaba: Rp ${formatNumber(d.net_profit)}`"
             >
-              <!-- Revenue bar -->
               <div class="w-full rounded-t transition-all duration-500"
                 :style="{ height: barHeight(d.revenue, maxMonthlyRevenue) + 'px', background: '#10b981', minHeight: d.revenue > 0 ? '4px' : '0' }">
               </div>
-              <!-- Expense bar -->
               <div class="w-full rounded-t transition-all duration-500"
                 :style="{ height: barHeight(d.expenses, maxMonthlyRevenue) * 0.6 + 'px', background: '#f59e0b', minHeight: d.expenses > 0 ? '4px' : '0' }">
               </div>
@@ -242,7 +289,6 @@
               <tr v-if="!monthlyDataFiltered.length">
                 <td colspan="4" class="p-8 text-center text-white/20 text-xs">Tidak ada data untuk bulan ini.</td>
               </tr>
-              <!-- Row total -->
               <tr v-if="monthlyDataFiltered.length" class="bg-white/5 font-bold border-t border-white/10">
                 <td class="px-6 py-3 text-white/50 text-[10px] uppercase tracking-wider">Total Bulan</td>
                 <td class="px-6 py-3 text-right font-mono text-emerald-400">Rp {{ formatNumber(summaryCards.revenue) }}</td>
@@ -256,20 +302,62 @@
         </div>
       </div>
 
-      <!-- Export untuk mode monthly -->
-      <div class="flex gap-3 justify-end">
-        <button @click="exportDocument('excel', selectedMonth, selectedYear)"
-          class="px-4 py-2.5 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-400 uppercase tracking-wider transition">
-          📥 Export Excel Bulan Ini
-        </button>
-        <button @click="exportDocument('pdf', selectedMonth, selectedYear)"
-          class="px-4 py-2.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-xl text-xs font-bold text-red-500 uppercase tracking-wider transition">
-          📄 Export PDF Bulan Ini
-        </button>
+      <!-- Export inline mode bulanan -->
+      <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold text-white uppercase tracking-wide">Export Periode Lain</p>
+          <p class="text-[11px] text-white/30 mt-0.5">
+            Saat ini menampilkan
+            <span class="text-red-400 font-mono">{{ monthNames[selectedMonth - 1] }} {{ selectedYear }}</span>
+            — bisa pilih periode berbeda di bawah
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Toggle bulanan/tahunan -->
+          <div class="flex items-center gap-1 bg-black/30 p-1 rounded-xl">
+            <button
+              @click="exportMode = 'monthly'"
+              class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition"
+              :class="exportMode === 'monthly' ? 'bg-red-600 text-white' : 'text-white/40 hover:text-white/60'"
+            >Bulanan</button>
+            <button
+              @click="exportMode = 'yearly'"
+              class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition"
+              :class="exportMode === 'yearly' ? 'bg-red-600 text-white' : 'text-white/40 hover:text-white/60'"
+            >Tahunan</button>
+          </div>
+
+          <select
+            v-if="exportMode === 'monthly'"
+            v-model.number="exportMonth"
+            class="bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-red-600"
+          >
+            <option v-for="(name, idx) in monthNames" :key="idx" :value="idx + 1">{{ name }}</option>
+          </select>
+
+          <select
+            v-model.number="exportYear"
+            class="bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-red-600"
+          >
+            <option v-for="y in yearsAvailable" :key="y" :value="y">{{ y }}</option>
+          </select>
+
+          <button @click="exportDocument('excel')" :disabled="isExporting"
+            class="px-4 py-2.5 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-400 uppercase tracking-wider transition disabled:opacity-40">
+            📥 Excel
+          </button>
+          <button @click="exportDocument('pdf')" :disabled="isExporting"
+            class="px-4 py-2.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-xl text-xs font-bold text-red-500 uppercase tracking-wider transition disabled:opacity-40">
+            📄 PDF
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- GRAFIK TAHUNAN (per bulan dalam 1 tahun) -->
+    <!-- ═══════════════════════════════════════════════
+         MODE TAHUNAN
+    ════════════════════════════════════════════════ -->
     <div v-if="viewMode === 'yearly'" class="space-y-6">
       <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 space-y-4">
         <h3 class="font-oswald text-xs uppercase tracking-widest text-white/40">
@@ -279,7 +367,6 @@
         <div v-if="isLoadingChart" class="text-center py-12 text-white/30 text-xs animate-pulse">Memuat data grafik...</div>
 
         <div v-else class="space-y-2">
-          <!-- Bar Chart 12 Bulan -->
           <div class="flex items-end gap-2 h-48">
             <div
               v-for="d in yearlyData"
@@ -332,7 +419,6 @@
                   {{ (d.revenue > 0 || d.expenses > 0) ? 'Rp ' + formatNumber(d.net_profit) : '-' }}
                 </td>
               </tr>
-              <!-- Row total tahunan -->
               <tr class="bg-white/5 font-bold border-t border-white/10">
                 <td class="px-6 py-3 text-white/50 text-[10px] uppercase tracking-wider">Total Tahun {{ selectedYear }}</td>
                 <td class="px-6 py-3 text-right font-mono text-emerald-400">Rp {{ formatNumber(summaryCards.revenue) }}</td>
@@ -346,16 +432,55 @@
         </div>
       </div>
 
-      <!-- Export untuk mode yearly -->
-      <div class="flex gap-3 justify-end">
-        <button @click="exportDocument('excel', null, selectedYear)"
-          class="px-4 py-2.5 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-400 uppercase tracking-wider transition">
-          📥 Export Excel Tahun {{ selectedYear }}
-        </button>
-        <button @click="exportDocument('pdf', null, selectedYear)"
-          class="px-4 py-2.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-xl text-xs font-bold text-red-500 uppercase tracking-wider transition">
-          📄 Export PDF Tahun {{ selectedYear }}
-        </button>
+      <!-- Export inline mode tahunan -->
+      <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold text-white uppercase tracking-wide">Export Laporan</p>
+          <p class="text-[11px] text-white/30 mt-0.5">
+            Saat ini menampilkan
+            <span class="text-red-400 font-mono">Tahun {{ selectedYear }}</span>
+            — bisa pilih periode berbeda di bawah
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex items-center gap-1 bg-black/30 p-1 rounded-xl">
+            <button
+              @click="exportMode = 'monthly'"
+              class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition"
+              :class="exportMode === 'monthly' ? 'bg-red-600 text-white' : 'text-white/40 hover:text-white/60'"
+            >Bulanan</button>
+            <button
+              @click="exportMode = 'yearly'"
+              class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition"
+              :class="exportMode === 'yearly' ? 'bg-red-600 text-white' : 'text-white/40 hover:text-white/60'"
+            >Tahunan</button>
+          </div>
+
+          <select
+            v-if="exportMode === 'monthly'"
+            v-model.number="exportMonth"
+            class="bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-red-600"
+          >
+            <option v-for="(name, idx) in monthNames" :key="idx" :value="idx + 1">{{ name }}</option>
+          </select>
+
+          <select
+            v-model.number="exportYear"
+            class="bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-red-600"
+          >
+            <option v-for="y in yearsAvailable" :key="y" :value="y">{{ y }}</option>
+          </select>
+
+          <button @click="exportDocument('excel')" :disabled="isExporting"
+            class="px-4 py-2.5 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-400 uppercase tracking-wider transition disabled:opacity-40">
+            📥 Excel
+          </button>
+          <button @click="exportDocument('pdf')" :disabled="isExporting"
+            class="px-4 py-2.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-xl text-xs font-bold text-red-500 uppercase tracking-wider transition disabled:opacity-40">
+            📄 PDF
+          </button>
+        </div>
       </div>
     </div>
 
@@ -363,11 +488,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted } from "vue";
 import apiClient from "@/api/client";
 import { toast } from "vue-sonner";
 
-// ── Constants ────────────────────────────────────────────────────────────────
 const monthNames = [
   "Januari","Februari","Maret","April","Mei","Juni",
   "Juli","Agustus","September","Oktober","November","Desember"
@@ -379,31 +503,31 @@ const viewModes = [
   { key: "yearly",  label: "Tahunan" },
 ];
 
-// ── State ────────────────────────────────────────────────────────────────────
-const viewMode      = ref("daily");
-const currentDate   = ref(new Date());
-const selectedMonth = ref(new Date().getMonth() + 1);
-const selectedYear  = ref(new Date().getFullYear());
+// ── State ─────────────────────────────────────────────────────────────────────
+const viewMode       = ref("daily");
+const currentDate    = ref(new Date());
+const selectedMonth  = ref(new Date().getMonth() + 1);
+const selectedYear   = ref(new Date().getFullYear());
 const yearsAvailable = ref([new Date().getFullYear()]);
 
-const financialSummary  = ref({ revenue: 0, expenses: 0, net_profit: 0 });
-const dailyExpensesList = ref([]);
-const monthlyData       = ref([]);
-const yearlyData        = ref([]);
-const isLoadingChart    = ref(false);
+const financialSummary    = ref({ revenue: 0, expenses: 0, net_profit: 0 });
+const dailyExpensesList   = ref([]);
+const monthlyData         = ref([]);
+const yearlyData          = ref([]);
+const isLoadingChart      = ref(false);
 const isSubmittingExpense = ref(false);
-const expenseForm = ref({ description: "", amount: null });
+const isExporting         = ref(false);
+const expenseForm         = ref({ description: "", amount: null });
 
-// Export controls
+// Export state — terpisah dari navigasi tampilan
+const exportMode  = ref("monthly");   // "monthly" | "yearly"
 const exportMonth = ref(new Date().getMonth() + 1);
 const exportYear  = ref(new Date().getFullYear());
 
-// ── Computed ─────────────────────────────────────────────────────────────────
+// ── Computed ──────────────────────────────────────────────────────────────────
 const targetDateString = computed(() => {
-  const yyyy = currentDate.value.getFullYear();
-  const mm   = String(currentDate.value.getMonth() + 1).padStart(2, '0');
-  const dd   = String(currentDate.value.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  const d = currentDate.value;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 });
 
 const viewModeLabel = computed(() => {
@@ -414,13 +538,9 @@ const viewModeLabel = computed(() => {
 
 const summaryCards = computed(() => {
   if (viewMode.value === "daily") return financialSummary.value;
-  if (viewMode.value === "monthly") {
-    const rev = monthlyData.value.reduce((a, d) => a + d.revenue, 0);
-    const exp = monthlyData.value.reduce((a, d) => a + d.expenses, 0);
-    return { revenue: rev, expenses: exp, net_profit: rev - exp };
-  }
-  const rev = yearlyData.value.reduce((a, d) => a + d.revenue, 0);
-  const exp = yearlyData.value.reduce((a, d) => a + d.expenses, 0);
+  const src = viewMode.value === "monthly" ? monthlyData.value : yearlyData.value;
+  const rev = src.reduce((a, d) => a + (d.revenue  || 0), 0);
+  const exp = src.reduce((a, d) => a + (d.expenses || 0), 0);
   return { revenue: rev, expenses: exp, net_profit: rev - exp };
 });
 
@@ -429,26 +549,34 @@ const monthlyDataFiltered = computed(() =>
 );
 
 const maxMonthlyRevenue = computed(() =>
-  Math.max(...monthlyData.value.map(d => Math.max(d.revenue, d.expenses)), 1)
+  Math.max(...monthlyData.value.map(d => Math.max(d.revenue || 0, d.expenses || 0)), 1)
 );
 
 const maxYearlyRevenue = computed(() =>
-  Math.max(...yearlyData.value.map(d => Math.max(d.revenue, d.expenses)), 1)
+  Math.max(...yearlyData.value.map(d => Math.max(d.revenue || 0, d.expenses || 0)), 1)
 );
 
-// ── Methods ───────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const formatNumber = (v) => Math.round(v || 0).toLocaleString("id-ID");
 
-const barHeight = (value, max, maxPx = 140) => {
-  if (!max || max === 0) return 0;
-  return Math.max(0, (value / max) * maxPx);
-};
+const barHeight = (value, max, maxPx = 140) =>
+  max ? Math.max(0, ((value || 0) / max) * maxPx) : 0;
 
 const switchMode = (mode) => {
   viewMode.value = mode;
-  if (mode === "daily")   fetchDailyData();
-  if (mode === "monthly") fetchMonthlyData();
-  if (mode === "yearly")  fetchYearlyData();
+  // Sinkronkan export period ke tampilan aktif saat mode berganti
+  if (mode === "monthly") {
+    exportMode.value  = "monthly";
+    exportMonth.value = selectedMonth.value;
+    exportYear.value  = selectedYear.value;
+    fetchMonthlyData();
+  } else if (mode === "yearly") {
+    exportMode.value = "yearly";
+    exportYear.value = selectedYear.value;
+    fetchYearlyData();
+  } else {
+    fetchDailyData();
+  }
 };
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -462,15 +590,19 @@ const changeDate = (days) => {
 const changeMonth = (delta) => {
   let m = selectedMonth.value + delta;
   let y = selectedYear.value;
-  if (m < 1) { m = 12; y--; }
-  if (m > 12) { m = 1; y++; }
+  if (m < 1)  { m = 12; y--; }
+  if (m > 12) { m = 1;  y++; }
   selectedMonth.value = m;
-  selectedYear.value = y;
+  selectedYear.value  = y;
+  // Sinkronkan export period ke bulan yang sedang dilihat
+  exportMonth.value = m;
+  exportYear.value  = y;
   fetchMonthlyData();
 };
 
 const changeYear = (delta) => {
   selectedYear.value += delta;
+  exportYear.value    = selectedYear.value;
   fetchYearlyData();
 };
 
@@ -487,8 +619,8 @@ const fetchDailyData = async () => {
     ]);
     financialSummary.value  = summaryRes.data;
     dailyExpensesList.value = expenseRes.data;
-  } catch (error) {
-    console.error("Gagal memuat data harian:", error);
+  } catch (err) {
+    console.error(err);
     toast.error("Gagal memuat data finansial harian.");
   }
 };
@@ -501,8 +633,8 @@ const fetchMonthlyData = async () => {
     });
     monthlyData.value = data.data;
     if (data.years_available) yearsAvailable.value = data.years_available;
-  } catch (error) {
-    console.error("Gagal memuat data bulanan:", error);
+  } catch (err) {
+    console.error(err);
     toast.error("Gagal memuat data bulanan.");
   } finally {
     isLoadingChart.value = false;
@@ -517,8 +649,8 @@ const fetchYearlyData = async () => {
     });
     yearlyData.value = data.data;
     if (data.years_available) yearsAvailable.value = data.years_available;
-  } catch (error) {
-    console.error("Gagal memuat data tahunan:", error);
+  } catch (err) {
+    console.error(err);
     toast.error("Gagal memuat data tahunan.");
   } finally {
     isLoadingChart.value = false;
@@ -535,9 +667,9 @@ const submitExpense = async () => {
       amount:      expenseForm.value.amount,
       date:        targetDateString.value,
     });
-    toast.success("Pengeluaran berhasil dicatat!");
     expenseForm.value = { description: "", amount: null };
-    fetchDailyData();
+    await fetchDailyData();
+    toast.success("Pengeluaran dicatat & dashboard diperbarui!");
   } catch {
     toast.error("Gagal mencatat pengeluaran.");
   } finally {
@@ -557,19 +689,43 @@ const deleteExpense = async (id) => {
 };
 
 // ── Export ────────────────────────────────────────────────────────────────────
-const exportDocument = (type, month = null, year = null) => {
-  const m = month ?? exportMonth.value;
-  const y = year  ?? exportYear.value;
-  const endpoint = type === 'excel' ? 'export_excel_report' : 'export_pdf_report';
-  const url = `${apiClient.defaults.baseURL}/orders/${endpoint}/?month=${m}&year=${y}`;
-  window.open(url, '_blank');
-  toast.success(`Mengunduh laporan ${type.toUpperCase()}...`);
+/**
+ * exportDocument(type)
+ *
+ * Ngirim ke endpoint Django yang benar sesuai exportMode:
+ *   monthly → /api/orders/export/finance-excel/?mode=monthly&month=M&year=Y
+ *   yearly  → /api/orders/export/finance-excel/?mode=yearly&year=Y
+ */
+const exportDocument = async (type) => {
+  isExporting.value = true;
+
+  const endpoint = type === "excel"
+    ? "/orders/export/finance-excel/"
+    : "/orders/export/finance-pdf/";
+
+  const params = new URLSearchParams({ mode: exportMode.value, year: exportYear.value });
+  if (exportMode.value === "monthly") params.append("month", exportMonth.value);
+
+  const url = `${apiClient.defaults.baseURL}${endpoint}?${params.toString()}`;
+
+  const periodLabel = exportMode.value === "monthly"
+    ? `${monthNames[exportMonth.value - 1]} ${exportYear.value}`
+    : `Tahun ${exportYear.value}`;
+
+  try {
+    window.open(url, "_blank");
+    toast.success(`📥 Mengunduh laporan ${type.toUpperCase()} — ${periodLabel}`);
+  } catch {
+    toast.error("Gagal membuka link unduhan.");
+  } finally {
+    // Kasih delay biar button disabled tidak langsung hilang
+    setTimeout(() => { isExporting.value = false; }, 1500);
+  }
 };
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await fetchDailyData();
-  // Pre-load years available dari yearly endpoint
   try {
     const { data } = await apiClient.get("/orders/finance/monthly/", {
       params: { year: selectedYear.value },

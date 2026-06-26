@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'menu',
     'order',
     'homepage',
+    'finance',
 ]
 
 # ========================

@@ -226,27 +226,25 @@ const checkout = async () => {
 
   isProcessing.value = true;
   try {
-    // FIX: backend create_order membaca data.customer.{phone,name}
-    // (atau fallback customer_phone/customer_name flat), BUKAN
-    // field flat "name"/"phone" seperti sebelumnya — sehingga
-    // diskon loyalty & pencatatan CustomerLoyalty tidak pernah
-    // jalan untuk order dari web. Juga tambahkan source: 'web'
-    // supaya payment_status/is_deferred_payment dihitung dengan
-    // aturan web (bukan default 'pos').
     const orderData = {
-      source: "web",
-      customer: {
-        phone: phone.value,
-        name: name.value,
-      },
-      payment_method: paymentMethod.value,
-      items: Object.values(cartStore.cart).map((item) => ({
-        menu_id: item.id,
-        quantity: item.quantity,
-        price: item.price,
-        notes: item.notes || "",
-      })),
+  source: "web",
+  customer: {
+    phone: phone.value,
+    name: name.value,
+  },
+  payment_method: paymentMethod.value,
+  items: Object.values(cartStore.cart).map((item) => {
+
+    const finalPrice = Math.ceil((Number(item.price) * 1.01) / 500) * 500;
+    
+    return {
+      menu_id: item.id,
+      quantity: item.quantity,
+      price: finalPrice, // Menggunakan harga markup
+      notes: item.notes || "",
     };
+  }),
+};
 
     const res = await orderAPI.create(orderData);
     // FIX: OrderSerializer mengembalikan "id" & "order_number",
