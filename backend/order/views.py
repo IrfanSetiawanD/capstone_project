@@ -294,31 +294,52 @@ class DashboardStatsView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        # Hanya order yang sudah LUNAS (payment_status=paid) untuk revenue
-        # FIX: exclude order yang dibatalkan (status='cancelled') dari hitungan
-        paid_orders = Order.objects.filter(
+        # ── Filter tanggal (opsional) ──────────────────────────────────────
+        date_from = request.query_params.get('date_from')
+        date_to   = request.query_params.get('date_to')
+
+        # Base queryset paid & tidak cancelled
+        paid_qs = Order.objects.filter(
             payment_status='paid',
         ).exclude(status='cancelled')
 
-        paid_stats = paid_orders.aggregate(
-            total_revenue = Sum("total_price"),
-            total_orders  = Count("id"),
+        # Kalau ada filter tanggal, apply ke revenue & orders
+        if date_from:
+            paid_qs = paid_qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            paid_qs = paid_qs.filter(created_at__date__lte=date_to)
+
+        paid_stats = paid_qs.aggregate(
+            total_revenue=Sum("total_price"),
+            total_orders=Count("id"),
         )
 
-        pending   = Order.objects.filter(status="pending").count()
-        completed = Order.objects.filter(status="completed").count()
+        # Pending & completed juga difilter tanggal
+        all_qs = Order.objects.all()
+        if date_from:
+            all_qs = all_qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            all_qs = all_qs.filter(created_at__date__lte=date_to)
 
-        # Top 5 menu: hanya dari order paid & tidak cancelled
+        pending   = all_qs.filter(status="pending").count()
+        completed = all_qs.filter(status="completed").count()
+
+        # Top 5 menu — ikut filter tanggal
+        top_menu_qs = OrderItem.objects.filter(
+            order__payment_status='paid',
+        ).exclude(order__status='cancelled')
+
+        if date_from:
+            top_menu_qs = top_menu_qs.filter(order__created_at__date__gte=date_from)
+        if date_to:
+            top_menu_qs = top_menu_qs.filter(order__created_at__date__lte=date_to)
+
         top_menus = (
-            OrderItem.objects
-            .filter(
-                order__payment_status='paid',
-            )
-            .exclude(order__status='cancelled')
+            top_menu_qs
             .values("menu__name")
             .annotate(
-                total_qty     = Sum("quantity"),
-                total_revenue = Sum(
+                total_qty=Sum("quantity"),
+                total_revenue=Sum(
                     models.ExpressionWrapper(
                         models.F("price") * models.F("quantity"),
                         output_field=models.DecimalField(),
@@ -328,6 +349,7 @@ class DashboardStatsView(APIView):
             .order_by("-total_qty")[:5]
         )
 
+        # ── Loyal users — TIDAK ikut filter tanggal, selalu bulan berjalan ──
         settings_obj = LoyaltySettings.get_settings()
         cutoff       = timezone.now() - timedelta(days=settings_obj.period_days)
         loyal_count  = (
@@ -345,7 +367,7 @@ class DashboardStatsView(APIView):
 
         return Response({
             "total_revenue":    paid_stats["total_revenue"] or 0,
-            "total_orders":     paid_stats["total_orders"] or 0,
+            "total_orders":     paid_stats["total_orders"]  or 0,
             "pending_orders":   pending,
             "completed_orders": completed,
             "top_menus": [
@@ -358,7 +380,6 @@ class DashboardStatsView(APIView):
             ],
             "loyal_users": loyal_count,
         })
-
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
