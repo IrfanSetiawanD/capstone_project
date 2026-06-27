@@ -45,7 +45,7 @@
             </div>
 
             <div class="flex items-center justify-between pt-4 border-t border-white/5">
-              <span class="font-mono text-sm font-bold text-amber-500">{{ formatPrice(menu.price) }}</span>
+              <span class="font-mono text-sm font-bold text-amber-500">{{ formatPrice(menu.price_web ?? menu.price) }}</span>
               <button @click="addToCart(menu)" :disabled="!menu.is_available"
                 class="bg-white/5 hover:bg-[#DC2626] text-white p-3 rounded-lg transition-all duration-300 cursor-pointer border border-white/5 disabled:bg-gray-800 disabled:opacity-50">
                 <Plus size="16" />

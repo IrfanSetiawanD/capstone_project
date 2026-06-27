@@ -71,6 +71,24 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    amount_paid = models.DecimalField(
+    max_digits=12,
+    decimal_places=0,
+    default=0
+    )
+
+    change_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=0,
+        default=0
+    )
+
+    kasir_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default=""
+    )
+
     class Meta:
         ordering = ['-created_at']
 
@@ -273,3 +291,4 @@ def generate_order_number():
 
         if not Order.objects.filter(order_number=code).exists():
             return code
+

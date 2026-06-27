@@ -14,12 +14,12 @@ from django.db.models import Count, Sum, Max
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from datetime import timedelta
 from decimal import Decimal
 from django.db.models import Q
 import math
 import calendar
 import datetime
+from datetime import timedelta
 
 # Finance app
 from finance.models import Expense
@@ -29,7 +29,7 @@ from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Order, OrderItem, CustomerLoyalty, LoyaltySettings
+from .models import Order, OrderItem, CustomerLoyalty, LoyaltySettings, PAYMENT_METHOD_CHOICES
 from menu.models import Menu
 from .serializers import OrderSerializer, LoyaltySettingsSerializer
 
@@ -57,25 +57,37 @@ def create_order(request):
     table_number   = data.get('table_number')
     notes          = data.get('notes', '')
 
+    amount_paid = Decimal(str(data.get('amount_paid', 0) or 0))
+    kasir_name  = data.get('kasir_name', '').strip()
+
     raw_payment_status = data.get('payment_status', '')
 
-    # FIX: logika payment_status lebih eksplisit & konsisten
+    # Logika payment_status
+    is_qris = payment_method in ('qris', 'qris_manual', 'gateway')
+
     if source == 'web':
-        # Web order selalu pending — belum dikonfirmasi kasir
-        payment_status = 'pending'
-        is_deferred    = False
-        order_status   = 'pending'
-    elif raw_payment_status == 'pending':
-        # POS "Makan Dulu" — bayar nanti
+        if is_qris:
+            # Web + QRIS → langsung paid & completed
+            payment_status = 'paid'
+            is_deferred    = False
+            order_status   = 'completed'
+        else:
+            # Web + cash → pending seperti biasa
+            payment_status = 'pending'
+            is_deferred    = False
+            order_status   = 'pending'
+    elif raw_payment_status == 'pending' and not is_qris:
+        # POS "Makan Dulu" — hanya boleh cash
         payment_status = 'unpaid'
         is_deferred    = True
         order_status   = 'pending'
     else:
-        # POS bayar langsung
+        # POS bayar sekarang (cash atau qris)
         payment_status = 'paid'
         is_deferred    = False
         order_status   = 'completed'
 
+    # Kumpulkan & validasi semua item terlebih dahulu
     processed_items = []
     for item_data in items_data:
         menu_obj = get_object_or_404(Menu, id=item_data.get('menu_id'))
@@ -85,10 +97,10 @@ def create_order(request):
                 status=400,
             )
 
-        price = item_data.get('price') or menu_obj.price
         if source == 'web':
-            # Markup 1% dan dibulatkan ke 500 terdekat untuk web order
-            price = math.ceil((float(price) * 1.01) / 500) * 500
+            price = item_data.get('price') or menu_obj.price_web
+        else:
+            price = item_data.get('price') or menu_obj.price
 
         processed_items.append({
             "menu":  menu_obj,
@@ -97,16 +109,19 @@ def create_order(request):
             "notes": item_data.get('notes', ''),
         })
 
+    # Buat order setelah semua item tervalidasi
     order = Order.objects.create(
-        source              = source,
-        status              = order_status,   # FIX: pakai order_status yang sudah ditentukan
-        payment_status      = payment_status,
-        payment_method      = payment_method,
-        is_deferred_payment = is_deferred,
-        customer_name       = name,
-        customer_phone      = phone,
-        table_number        = table_number,
-        notes               = notes,
+        source=source,
+        status=order_status,
+        payment_status=payment_status,
+        payment_method=payment_method,
+        is_deferred_payment=is_deferred,
+        customer_name=name,
+        customer_phone=phone,
+        table_number=table_number,
+        notes=notes,
+        amount_paid=amount_paid,
+        kasir_name=kasir_name,
     )
 
     OrderItem.objects.bulk_create([
@@ -125,6 +140,15 @@ def create_order(request):
         order.apply_loyalty_discount()
 
     order.refresh_from_db()
+
+    if payment_status == "paid" and amount_paid > 0:
+        order.change_amount = max(
+            amount_paid - order.total_price,
+            Decimal("0"),
+        )
+        order.save(update_fields=["change_amount"])
+        order.refresh_from_db()
+
     return Response(OrderSerializer(order).data, status=201)
 
 
@@ -294,16 +318,13 @@ class DashboardStatsView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        # ── Filter tanggal (opsional) ──────────────────────────────────────
         date_from = request.query_params.get('date_from')
         date_to   = request.query_params.get('date_to')
 
-        # Base queryset paid & tidak cancelled
         paid_qs = Order.objects.filter(
             payment_status='paid',
         ).exclude(status='cancelled')
 
-        # Kalau ada filter tanggal, apply ke revenue & orders
         if date_from:
             paid_qs = paid_qs.filter(created_at__date__gte=date_from)
         if date_to:
@@ -314,7 +335,6 @@ class DashboardStatsView(APIView):
             total_orders=Count("id"),
         )
 
-        # Pending & completed juga difilter tanggal
         all_qs = Order.objects.all()
         if date_from:
             all_qs = all_qs.filter(created_at__date__gte=date_from)
@@ -324,7 +344,6 @@ class DashboardStatsView(APIView):
         pending   = all_qs.filter(status="pending").count()
         completed = all_qs.filter(status="completed").count()
 
-        # Top 5 menu — ikut filter tanggal
         top_menu_qs = OrderItem.objects.filter(
             order__payment_status='paid',
         ).exclude(order__status='cancelled')
@@ -349,7 +368,7 @@ class DashboardStatsView(APIView):
             .order_by("-total_qty")[:5]
         )
 
-        # ── Loyal users — TIDAK ikut filter tanggal, selalu bulan berjalan ──
+        # Loyal users — selalu berdasarkan period_days, tidak ikut filter tanggal
         settings_obj = LoyaltySettings.get_settings()
         cutoff       = timezone.now() - timedelta(days=settings_obj.period_days)
         loyal_count  = (
@@ -380,6 +399,7 @@ class DashboardStatsView(APIView):
             ],
             "loyal_users": loyal_count,
         })
+
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -415,7 +435,6 @@ def finance_monthly_summary(request):
 
     year = int(request.query_params.get("year", timezone.now().year))
 
-    # Revenue per bulan (paid only, exclude cancelled)
     revenue_qs = (
         Order.objects
         .filter(created_at__year=year, payment_status='paid')
@@ -427,7 +446,6 @@ def finance_monthly_summary(request):
     )
     revenue_map = {r['month'].month: r['total'] for r in revenue_qs}
 
-    # FIX: hapus query expense_qs duplikat, pakai ExtractMonth langsung
     expense_qs = (
         Expense.objects
         .filter(date__year=year)
@@ -464,7 +482,6 @@ def finance_daily_summary(request):
     year  = int(request.query_params.get("year",  timezone.now().year))
     month = int(request.query_params.get("month", timezone.now().month))
 
-    # Revenue per hari (paid only, exclude cancelled)
     revenue_qs = (
         Order.objects
         .filter(
@@ -480,7 +497,6 @@ def finance_daily_summary(request):
     )
     revenue_map = {str(r['day']): r['total'] for r in revenue_qs}
 
-    # Expense per hari
     expense_qs = (
         Expense.objects
         .filter(date__year=year, date__month=month)
@@ -516,10 +532,6 @@ def export_excel_report(request):
     """
     GET /api/orders/export/finance-excel/?mode=monthly&month=7&year=2026
     GET /api/orders/export/finance-excel/?mode=yearly&year=2026
-
-    FIX: redirect ke finance_excel.py yang sudah berfitur lengkap
-    (template branded, cover, rekap, top menu, pengeluaran).
-    Query param lama ?month=&year= tetap didukung (diperlakukan sebagai mode=monthly).
     """
     from .finance_excel import export_finance_excel_view
     return export_finance_excel_view(request)
@@ -531,9 +543,6 @@ def export_pdf_report(request):
     """
     GET /api/orders/export/finance-pdf/?mode=monthly&month=7&year=2026
     GET /api/orders/export/finance-pdf/?mode=yearly&year=2026
-
-    FIX: redirect ke finance_pdf.py yang sudah berfitur lengkap
-    (cover halaman, KPI cards, tanda tangan, dsb.).
     """
     from .finance_pdf import export_finance_pdf_view
     return export_finance_pdf_view(request)
@@ -642,9 +651,6 @@ class GiveSpecialPriceView(APIView):
 def unpaid_orders(request):
     search = request.query_params.get("search", "")
 
-    # Tangkap semua order yang belum lunas:
-    #   'unpaid'  → POS "Makan Dulu" (is_deferred_payment=True)
-    #   'pending' → Web checkout / belum dikonfirmasi kasir
     qs = (
         Order.objects
         .filter(payment_status__in=["unpaid", "pending"])
@@ -667,27 +673,31 @@ def unpaid_orders(request):
 @permission_classes([AllowAny])
 def pay_order(request, pk):
     order = get_object_or_404(Order, pk=pk)
-
-    # FIX: simpan status sebelumnya SEBELUM diubah supaya signal loyalty bisa
-    # membandingkan previous vs new. Gunakan field private yang dicek di signal.
     previous_status = order.status
+
+    amount_paid = Decimal(str(request.data.get('amount_paid', 0) or 0))
+    kasir_name  = request.data.get('kasir_name', '').strip()
 
     order.payment_status = "paid"
     order.status         = "completed"
     order.payment_method = (
         request.data.get("payment_method") or order.payment_method or "cash"
     )
-    # FIX: set _previous_status setelah update field, sebelum save,
-    # agar signal post_save bisa mengaksesnya
+    order.kasir_name     = kasir_name or order.kasir_name
+    order.amount_paid    = amount_paid
+
+    if amount_paid > 0:
+        order.change_amount = max(amount_paid - order.total_price, Decimal('0'))
+
     order._previous_status = previous_status
     order.save()
-
-    # FIX: refresh untuk memastikan data yang dikembalikan sinkron dengan DB
     order.refresh_from_db()
 
     return Response({
-        "success":      True,
-        "order_number": order.order_number,
+        "success":       True,
+        "order_number":  order.order_number,
+        "change_amount": float(order.change_amount),
+        "amount_paid":   float(order.amount_paid),
     })
 
 
@@ -696,11 +706,7 @@ def pay_order(request, pk):
 def order_history(request):
     """
     GET /api/orders/history/?period=today|week|month
-    GET /api/orders/history/?period=month&year=2026&month=6  ← filter spesifik
-
-    FIX: filter 'month' sebelumnya pakai timedelta(days=30) yang tidak akurat.
-    Sekarang filter by year+month yang tepat, dengan fallback ke 30 hari terakhir
-    jika year/month tidak disertakan.
+    GET /api/orders/history/?period=month&year=2026&month=6
     """
     period = request.query_params.get("period", "today")
     now    = timezone.now()
@@ -714,8 +720,6 @@ def order_history(request):
         qs = qs.filter(created_at__gte=now - timedelta(days=7))
 
     elif period == "month":
-        # FIX: gunakan year & month dari query param jika ada,
-        # fallback ke bulan & tahun sekarang
         year  = request.query_params.get("year",  now.year)
         month = request.query_params.get("month", now.month)
         qs    = qs.filter(
@@ -730,3 +734,275 @@ def order_history(request):
     return Response(
         OrderSerializer(qs.order_by("-created_at"), many=True).data
     )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def order_full_report(request):
+    from django.db.models.functions import ExtractHour, TruncDate, TruncMonth
+
+    period = request.query_params.get("period", "lifetime")
+    now    = timezone.now()
+    year   = int(request.query_params.get("year",  now.year))
+    month  = int(request.query_params.get("month", now.month))
+    days   = int(request.query_params.get("days",  7))
+    offset = int(request.query_params.get("offset", 0))
+
+    if days not in (7, 14, 28, 30):
+        days = 7
+
+    # ── 1. Tentukan period_start / period_end ──────────────────────────
+    period_start = None
+    period_end   = None
+
+    if period == "week":
+        period_end   = now.date() - timedelta(days=offset)
+        period_start = period_end - timedelta(days=days - 1)
+
+    elif period == "month":
+        period_start = datetime.date(year, month, 1)
+        period_end   = datetime.date(year, month, calendar.monthrange(year, month)[1])
+
+    elif period == "year":
+        period_start = datetime.date(year, 1, 1)
+        period_end   = datetime.date(year, 12, 31)
+
+    # ── 2. Base queryset ───────────────────────────────────────────────
+    qualifying_qs = Order.objects.filter(payment_status="paid").exclude(status="cancelled")
+    if period_start and period_end:
+        qualifying_qs = qualifying_qs.filter(
+            created_at__date__gte=period_start,
+            created_at__date__lte=period_end,
+        )
+
+    qualifying_ids = list(qualifying_qs.values_list("id", flat=True))
+
+    # ── 3. Stats utama ─────────────────────────────────────────────────
+    main_stats = qualifying_qs.aggregate(
+        total_omzet=Sum("total_price"),
+        total_transaksi=Count("id"),
+    )
+    total_omzet     = main_stats["total_omzet"] or 0
+    total_transaksi = main_stats["total_transaksi"] or 0
+    rata_rata       = (total_omzet / total_transaksi) if total_transaksi else 0
+    menu_aktif      = Menu.objects.filter(is_active=True).count()
+
+    # ── 4. Trend ───────────────────────────────────────────────────────
+    base_trend_qs = (
+        Order.objects.filter(payment_status="paid").exclude(status="cancelled")
+    )
+
+    if period == "year":
+        BULAN_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"]
+        trend_qs = (
+            base_trend_qs
+            .filter(created_at__date__gte=period_start, created_at__date__lte=period_end)
+            .annotate(period_label=TruncMonth("created_at"))
+            .values("period_label")
+            .annotate(omzet=Sum("total_price"), transaksi=Count("id"))
+            .order_by("period_label")
+        )
+        trend_labels    = [BULAN_ID[t["period_label"].month - 1] for t in trend_qs]
+        trend_dates     = [str(t["period_label"].date()) for t in trend_qs]
+        trend_omzet     = [float(t["omzet"] or 0) for t in trend_qs]
+        trend_transaksi = [t["transaksi"] for t in trend_qs]
+
+    elif period in ("week", "month") and period_start and period_end:
+        trend_qs = (
+            base_trend_qs
+            .filter(created_at__date__gte=period_start, created_at__date__lte=period_end)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(omzet=Sum("total_price"), transaksi=Count("id"))
+        )
+        trend_map = {}
+        for row in trend_qs:
+            d = row["day"]
+            if hasattr(d, "date"):
+                d = d.date()
+            trend_map[d] = row
+
+        HARI_ID = ["Sen","Sel","Rab","Kam","Jum","Sab","Min"]
+        trend_labels, trend_dates, trend_omzet, trend_transaksi = [], [], [], []
+        for i in range((period_end - period_start).days + 1):
+            d   = period_start + timedelta(days=i)
+            row = trend_map.get(d)
+            trend_labels.append(HARI_ID[d.weekday()])
+            trend_dates.append(str(d))
+            trend_omzet.append(float(row["omzet"]) if row else 0)
+            trend_transaksi.append(row["transaksi"] if row else 0)
+
+    else:
+        # Lifetime — by date
+        trend_qs = (
+            base_trend_qs
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(omzet=Sum("total_price"), transaksi=Count("id"))
+            .order_by("day")
+        )
+        trend_labels    = [str(t["day"]) for t in trend_qs]
+        trend_dates     = trend_labels[:]
+        trend_omzet     = [float(t["omzet"] or 0) for t in trend_qs]
+        trend_transaksi = [t["transaksi"] for t in trend_qs]
+
+    # ── 5. Top menu ────────────────────────────────────────────────────
+    base_item_qs = OrderItem.objects.filter(order_id__in=qualifying_ids)
+
+    top_by_qty = list(
+        base_item_qs.values("menu__name")
+        .annotate(
+            qty=Sum("quantity"),
+            omzet=Sum(
+                models.ExpressionWrapper(
+                    models.F("price") * models.F("quantity"),
+                    output_field=models.DecimalField(),
+                )
+            ),
+        )
+        .order_by("-qty")[:10]
+    )
+    top_by_omzet = list(
+        base_item_qs.values("menu__name")
+        .annotate(
+            omzet=Sum(
+                models.ExpressionWrapper(
+                    models.F("price") * models.F("quantity"),
+                    output_field=models.DecimalField(),
+                )
+            ),
+        )
+        .order_by("-omzet")[:5]
+    )
+
+    # ── 6. Menu tidak laku ─────────────────────────────────────────────
+    menu_tidak_laku = list(
+        Menu.objects.filter(is_active=True)
+        .annotate(
+            transaksi=Count("orderitem", filter=Q(orderitem__order_id__in=qualifying_ids))
+        )
+        .order_by("transaksi", "name")
+        .values("name", "transaksi")[:10]
+    )
+
+    # ── 7. Metode pembayaran ───────────────────────────────────────────
+    pembayaran_qs = (
+        qualifying_qs.values("payment_method")
+        .annotate(count=Count("id"), total=Sum("total_price"))
+        .order_by("-total")
+    )
+    method_labels         = dict(PAYMENT_METHOD_CHOICES)
+    total_revenue_for_pct = float(total_omzet) or 1
+    metode_pembayaran = [
+        {
+            "method":  row["payment_method"],
+            "label":   method_labels.get(row["payment_method"], row["payment_method"] or "Lainnya"),
+            "count":   row["count"],
+            "total":   float(row["total"] or 0),
+            "percent": round(float(row["total"] or 0) / total_revenue_for_pct * 100, 1),
+        }
+        for row in pembayaran_qs
+    ]
+
+    # ── 8. Pelanggan ───────────────────────────────────────────────────
+    first_order_map = {
+        row["customer_phone"]: row["first_date"]
+        for row in (
+            Order.objects.filter(payment_status="paid")
+            .exclude(status="cancelled")
+            .exclude(customer_phone="")
+            .values("customer_phone")
+            .annotate(first_date=models.Min("created_at"))
+        )
+    }
+    phones_in_period = (
+        qualifying_qs.exclude(customer_phone="")
+        .values_list("customer_phone", flat=True)
+        .distinct()
+    )
+    pelanggan_baru = 0
+    pelanggan_lama = 0
+    for phone in phones_in_period:
+        first_date = first_order_map.get(phone)
+        if not first_date:
+            continue
+        if period_start and first_date.date() < period_start:
+            pelanggan_lama += 1
+        else:
+            pelanggan_baru += 1
+
+    settings_obj    = LoyaltySettings.get_settings()
+    loyal_overrides = set(
+        CustomerLoyalty.objects.exclude(special_discount_percentage__isnull=True)
+        .values_list("phone", flat=True)
+    )
+    per_phone_stats = (
+        qualifying_qs.exclude(customer_phone="")
+        .values("customer_phone")
+        .annotate(jumlah=Count("id"), total=Sum("total_price"))
+    )
+    member_loyal = 0
+    for row in per_phone_stats:
+        if row["customer_phone"] in loyal_overrides:
+            member_loyal += 1
+            continue
+        if (
+            row["jumlah"] >= settings_obj.min_orders
+            and (row["total"] or Decimal("0")) >= settings_obj.min_spending
+        ):
+            member_loyal += 1
+
+    # ── 9. Jam teramai ─────────────────────────────────────────────────
+    jam_qs = (
+        qualifying_qs.annotate(hour=ExtractHour("created_at"))
+        .values("hour")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:5]
+    )
+    jam_teramai = [
+        {
+            "hour":  row["hour"],
+            "label": f"{row['hour']:02d}.00 - {(row['hour'] + 1) % 24:02d}.00",
+            "count": row["count"],
+        }
+        for row in sorted(jam_qs, key=lambda x: x["hour"])
+    ]
+
+    return Response({
+        "period": {
+            "mode":   period,
+            "year":   year,
+            "month":  month,
+            "days":   days,
+            "start":  str(period_start) if period_start else None,
+            "end":    str(period_end)   if period_end   else None,
+        },
+        "stats": {
+            "total_omzet":         float(total_omzet),
+            "total_transaksi":     total_transaksi,
+            "rata_rata_transaksi": float(rata_rata),
+            "menu_aktif":          menu_aktif,
+        },
+        "trend": {
+            "labels":    trend_labels,
+            "dates":     trend_dates,
+            "omzet":     trend_omzet,
+            "transaksi": trend_transaksi,
+        },
+        "top_menu": [
+            {"name": r["menu__name"], "qty": r["qty"], "omzet": float(r["omzet"] or 0)}
+            for r in top_by_qty
+        ],
+        "menu_paling_menghasilkan": [
+            {"name": r["menu__name"], "omzet": float(r["omzet"] or 0)}
+            for r in top_by_omzet
+        ],
+        "menu_tidak_laku": menu_tidak_laku,
+        "metode_pembayaran": metode_pembayaran,
+        "pelanggan": {
+            "baru":         pelanggan_baru,
+            "lama":         pelanggan_lama,
+            "loyal_member": member_loyal,
+        },
+        "jam_teramai": jam_teramai,
+    })

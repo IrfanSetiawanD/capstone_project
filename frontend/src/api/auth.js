@@ -9,10 +9,11 @@ export const authAPI = {
     }
     return response;
   },
-
+  
   logout: () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
+    localStorage.removeItem("user"); 
   },
 
   createUser: (data) => {

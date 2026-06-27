@@ -1,3 +1,4 @@
+import math
 from django.db import models
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
@@ -13,13 +14,19 @@ class Category(models.Model):
 
 
 class Menu(models.Model):
-    name = models.CharField(max_length=100)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
-    price = models.DecimalField(max_digits=10, decimal_places=0)
+    name        = models.CharField(max_length=100)
+    category    = models.ForeignKey(Category, on_delete=models.CASCADE)
+    price       = models.DecimalField(max_digits=10, decimal_places=0)
+    price_web   = models.DecimalField(max_digits=10, decimal_places=0, editable=False, default=0)
     description = models.TextField(blank=True, null=True)
     is_available = models.BooleanField(default=True)
-    is_active = models.BooleanField(default=True)
-    image = CloudinaryField('image', folder='menus/', null=True, blank=True)
+    is_active    = models.BooleanField(default=True)
+    image        = CloudinaryField('image', folder='menus/', null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        # Markup 1%, bulatkan ke kelipatan 500 terdekat ke atas
+        self.price_web = math.ceil((float(self.price) * 1.01) / 500) * 500
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -27,10 +34,6 @@ class Menu(models.Model):
 
 @receiver(post_delete, sender=Menu)
 def delete_cloudinary_image_on_delete(sender, instance, **kwargs):
-    """
-    Satu-satunya tempat yang menghapus file Cloudinary saat object Menu
-    dihapus (baik via .delete() instance maupun queryset).
-    """
     if instance.image:
         try:
             cloudinary.uploader.destroy(instance.image.public_id)

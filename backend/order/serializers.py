@@ -57,6 +57,20 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     created_time = serializers.SerializerMethodField()
 
+    amount_paid = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=0,
+        read_only=True
+    )
+
+    change_amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=0,
+        read_only=True
+    )
+
+    kasir_name = serializers.CharField(read_only=True)
+
     def get_created_time(self, obj):
         return obj.created_at.strftime("%H:%M WIB")
 
@@ -80,6 +94,9 @@ class OrderSerializer(serializers.ModelSerializer):
             "created_at",
             "created_time",
             "items",
+            "amount_paid",
+            "change_amount",
+            "kasir_name",
         ]
 
 

@@ -6,6 +6,7 @@ from .views import (
     check_loyalty_status,
     loyal_customers,
     order_reports,
+    order_full_report, 
     active_orders_per_day,
     DashboardStatsView,
     LoyaltySettingsView,
@@ -52,7 +53,8 @@ urlpatterns = [
     path("orders/finance/daily/",   finance_daily_summary,   name="finance-daily"),
     path("orders/export/finance-excel/", export_finance_excel_view, name="finance-export-excel"),
     path("orders/export/finance-pdf/", export_finance_pdf_view, name="finance-export-pdf"),
-
+    path("orders/reports/full/",                   order_full_report,            name="order-reports-full"), 
+    
     # ── Tagihan belum lunas & riwayat ─────────────────────────────────────────
     path("orders/unpaid/",   unpaid_orders, name="unpaid-orders"),
     path("orders/history/",  order_history, name="order-history"),

@@ -241,19 +241,13 @@ const displayedGallery = computed(() => {
 const fetchBestSellers = async () => {
   try {
     const res = await axios.get("http://127.0.0.1:8000/api/menus/bestsellers/");
-    if (res.data && res.data.length > 0) {
+    if (res.data && Array.isArray(res.data) && res.data.length > 0) {
       bestSellers.value = res.data.map(item => ({
         name: item.name,
-        desc: item.description || item.desc || "Menu favorit pilihan squad Masashimura.",
-        price: item.price,
-        image: item.image || "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?q=80&w=500"
+        desc: item.description || "Menu favorit pilihan squad Masashimura.",
+        price: Number(item.price),
+        image: item.image_url || "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?q=80&w=500"
       }));
-    } else {
-      bestSellers.value = [
-        { name: "Mie Nyemek Masashimura", desc: "Mie kuah kental super gurih racikan bumbu warkop rahasia.", price: 18000, image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?q=80&w=500" },
-        { name: "Nasi Goreng Gila", desc: "Nasi goreng aroma smoky wok khas abang-abang kafe.", price: 22000, image: "https://images.unsplash.com/photo-1600891964599-f61ba0e24092?q=80&w=500" },
-        { name: "Kopi Susu Gula Aren", desc: "Double shot espresso robusta dicampur susu murni creamy.", price: 15000, image: "https://images.unsplash.com/photo-1541167760496-1628856ab772?q=80&w=500" }
-      ];
     }
   } catch (err) {
     console.error("Gagal memuat data menu terlaris:", err);

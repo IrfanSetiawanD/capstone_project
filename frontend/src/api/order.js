@@ -7,7 +7,7 @@ export const orderAPI = {
 
   // Dipakai untuk silent loyalty check di Checkout.vue (lihat stores/cart.js -> checkLoyalty)
   checkLoyalty: (phone) =>
-    apiClient.get("/orders/check-loyalty/", { params: { phone } }),
+    apiClient.get("/orders/check_loyalty_status/", { params: { phone } }),
 
   getLoyalCustomers: () => apiClient.get("/orders/loyal/"),
   getOrderReports: (params = {}) =>

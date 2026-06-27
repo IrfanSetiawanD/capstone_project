@@ -21,16 +21,18 @@ export const useCartStore = defineStore("cart", () => {
   );
 
 const addToCart = (menu) => {
-  const isWeb = true; 
-  const finalPrice = isWeb ? menu.web_price : menu.price;
+  // price_web sudah dihitung di backend saat menu disimpan
+  const price   = menu.price_web ?? menu.price;
   const cartKey = `${menu.id}-${Date.now()}`;
 
   cart.value[cartKey] = {
     ...menu,
     cartKey,
     quantity: 1,
-    notes: "",
-    price: finalPrice, 
+    notes:    "",
+    price,         
+    price_pos: menu.price,     
+    price_web: menu.price_web, 
   };
 };
 

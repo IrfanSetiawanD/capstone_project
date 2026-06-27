@@ -9,7 +9,8 @@ class CategoryAdmin(admin.ModelAdmin):
     
 @admin.register(Menu)
 class MenuAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'category', 'price','is_available', 'is_active')
-    list_display_links = ('id', 'name') 
-    list_filter = ('category', 'is_active')
-    search_fields = ('name',)
+    list_display       = ('id', 'name', 'category', 'price', 'price_web', 'is_available', 'is_active')
+    list_display_links = ('id', 'name')
+    list_filter        = ('category', 'is_active')
+    search_fields      = ('name',)
+    readonly_fields    = ('price_web',)

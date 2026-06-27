@@ -98,11 +98,10 @@ const handleSaved = async () => {
 
 const groupedMenus = computed(() => {
   return menus.value.reduce((groups, menu) => {
-    // Cek bentuk asli field ini dari response GET /menus/ lo: kalau backend
-    // mengembalikan category sebagai ID, ganti ke field nama kategori yang
-    // sesuai (mis. menu.category_name) supaya label grup tidak jadi angka.
-    const cat = menu.category || "LAINNYA";
-    if (!groups[cat]) groups[cat] = [];
+    const cat = menu.category_name || "Lainnya";
+    if (!groups[cat]) {
+      groups[cat] = [];
+    }
     groups[cat].push(menu);
     return groups;
   }, {});
