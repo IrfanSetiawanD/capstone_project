@@ -292,3 +292,58 @@ def generate_order_number():
         if not Order.objects.filter(order_number=code).exists():
             return code
 
+class StoreSettings(models.Model):
+    """
+    Singleton — selalu pakai pk=1.
+    Simpan semua konfigurasi toko: WA admin, jam operasional, override manual.
+    """
+ 
+    admin_whatsapp = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="Nomor WA admin format internasional tanpa +, cth: 628xxx"
+    )
+ 
+    # null = ikut jadwal | True = paksa buka | False = paksa tutup
+    is_open_override = models.BooleanField(
+        null=True, blank=True, default=None,
+        help_text="null=jadwal, True=paksa buka, False=paksa tutup"
+    )
+ 
+    closed_message = models.TextField(
+        default="Maaf, kami sedang tidak beroperasi. Silakan kembali sesuai jam operasional kami.",
+        help_text="Pesan yang ditampilkan saat toko tutup"
+    )
+ 
+    # Format JSON:
+    # {
+    #   "0": {"open": "08:00", "close": "22:00"},   ← Senin
+    #   "1": {"open": "08:00", "close": "22:00"},   ← Selasa
+    #   ...
+    #   "6": null                                    ← Minggu libur (atau tidak ada key-nya)
+    # }
+    # Key: 0=Senin, 1=Selasa, ..., 6=Minggu
+    operating_hours = models.JSONField(
+        default=dict, blank=True,
+        help_text="Jadwal per hari. Key 0-6 (0=Senin), value: {open, close} atau null"
+    )
+ 
+    updated_at = models.DateTimeField(auto_now=True)
+ 
+    class Meta:
+        verbose_name        = "Store Settings"
+        verbose_name_plural = "Store Settings"
+ 
+    def __str__(self):
+        return "Store Settings"
+ 
+    def save(self, *args, **kwargs):
+        self.pk = 1   # Singleton
+        super().save(*args, **kwargs)
+ 
+    def delete(self, *args, **kwargs):
+        pass  # Jangan hapus row ini
+ 
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

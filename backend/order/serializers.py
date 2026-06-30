@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Order, OrderItem, LoyaltySettings
+from .models import Order, OrderItem, LoyaltySettings, StoreSettings
 from menu.models import Menu, Category
 import math
 
@@ -118,6 +118,18 @@ class LoyaltySettingsSerializer(serializers.ModelSerializer):
             "period_days",
             "discount_percentage",   # dipakai backend & LoyalCustomers.vue
             "discount_percent",      # alias untuk SystemSettings.vue
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]
+
+class StoreSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = StoreSettings
+        fields = [
+            "admin_whatsapp",
+            "is_open_override",
+            "closed_message",
+            "operating_hours",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

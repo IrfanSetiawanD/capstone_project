@@ -79,8 +79,12 @@ const isGenerating = ref(false);
 // preview/tampilan akhirnya (EditHomepage.vue & Home.vue).
 const targetResolution = computed(() => {
   switch (props.type) {
-    case "hero":
-      return { width: 1920, height: 1080 }; // Banner lanskap hero — 16:9
+    case "hero_bg":
+      return { width: 1920, height: 1080 } // Background parallax — 16:9
+    case "hero_food":
+      return { width: 800, height: 800 }
+    case "hero":  // legacy, tetap ada
+      return { width: 1920, height: 1080 }
     case "gallery":
       return { width: 800, height: 800 }; // Galeri outlet — 1:1
     case "about":
@@ -107,6 +111,8 @@ const ratioLabel = computed(() => {
 const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
 
 const cropLabel = computed(() => {
+  if (props.type === "hero_bg")   return "Background Hero (Parallax)"
+  if (props.type === "hero_food") return "Foto Makanan (Kotak Kanan)"
   if (props.type === "hero") return "Hero Banner Website";
   if (props.type === "gallery") return "Gallery Outlet";
   if (props.type === "about") return "Tentang Toko";

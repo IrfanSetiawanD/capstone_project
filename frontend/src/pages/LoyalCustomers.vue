@@ -1,216 +1,228 @@
 <template>
-  <div class="w-full">
-    <div class="max-w-7xl mx-auto space-y-8">
+  <div class="lc-root">
 
-      <!-- Header -->
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <p class="text-[10px] uppercase tracking-[0.3em] text-red-500 font-bold mb-2">Admin Panel</p>
-          <h1 class="font-oswald text-4xl uppercase tracking-tight text-white">
-            Loyal Customers
-          </h1>
-          <p class="text-white/30 text-xs mt-1.5">
-            Syarat: min. 10 pesanan &amp; Rp 100.000 dalam 1 bulan
-          </p>
-        </div>
-        <button
-          @click="refreshData"
-          class="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-all text-white/60 hover:text-white"
-        >
-          <span class="text-sm">↺</span> Refresh
-        </button>
+    <!-- ── PAGE HEADER ─────────────────────────────────────────────── -->
+    <div class="lc-header">
+      <div>
+        <p class="lc-eyebrow">Masashimura · Program Loyalitas</p>
+        <h1 class="lc-title">Loyal Customers</h1>
+        <p class="lc-subtitle">Syarat: min. 10 pesanan &amp; Rp 100.000 dalam 1 bulan</p>
       </div>
+      <button @click="refreshData" class="refresh-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
 
-      <!-- Stats Summary -->
-      <div class="grid grid-cols-3 gap-4">
-        <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-5">
-          <p class="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Member</p>
-          <p class="font-oswald text-3xl font-bold text-white">{{ loyalty.loyalCustomers.length }}</p>
+    <!-- ── STAT CARDS ─────────────────────────────────────────────── -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-top">
+          <span class="stat-label">Total Member</span>
+          <span class="stat-dot dot-white"></span>
         </div>
-        <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-5">
-          <p class="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Loyal Member</p>
-          <p class="font-oswald text-3xl font-bold text-emerald-400">{{ loyalCount }}</p>
-        </div>
-        <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-5">
-          <p class="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Dapat Diskon</p>
-          <p class="font-oswald text-3xl font-bold text-amber-400">{{ discountedCount }}</p>
-        </div>
+        <div class="stat-val">{{ loyalty.loyalCustomers.length }}</div>
+        <div class="stat-note">terdaftar di sistem</div>
       </div>
-
-      <!-- Loading -->
-      <div
-        v-if="loyalty.loading"
-        class="text-center py-24 bg-[#0a0a0a] border border-white/5 rounded-2xl"
-      >
-        <div class="inline-block animate-spin rounded-full h-7 w-7 border-2 border-white/10 border-t-red-500 mb-4"></div>
-        <p class="text-white/30 text-xs uppercase tracking-widest font-bold">Memuat data...</p>
-      </div>
-
-      <!-- Tabel -->
-      <div v-else class="bg-[#0a0a0a] border border-white/5 rounded-2xl overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead class="border-b border-white/5">
-              <tr class="text-[10px] uppercase font-bold tracking-[0.15em] text-white/25">
-                <th class="px-6 py-5">Pelanggan</th>
-                <th class="px-6 py-5">Periode</th>
-                <th class="px-6 py-5 text-center">Pesanan</th>
-                <th class="px-6 py-5 text-right">Total Belanja</th>
-                <th class="px-6 py-5 text-center">Diskon</th>
-                <th class="px-6 py-5 text-center">Status</th>
-                <th class="px-6 py-5 text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-white/[0.04]">
-              <tr
-                v-for="customer in loyalty.loyalCustomers"
-                :key="customer.phone"
-                class="hover:bg-white/[0.015] transition-colors group"
-              >
-                <!-- Nomor HP -->
-                <td class="px-6 py-5">
-                  <p class="font-mono font-bold text-white text-sm tracking-wider">{{ customer.phone }}</p>
-                </td>
-
-                <!-- Periode -->
-                <td class="px-6 py-5">
-                  <p class="text-white/40 text-xs">{{ customer.month || "—" }}</p>
-                </td>
-
-                <!-- Jumlah Pesanan -->
-                <td class="px-6 py-5 text-center">
-                  <span class="font-oswald text-xl font-bold text-white">{{ customer.order_count || 0 }}</span>
-                  <span class="text-white/20 text-xs ml-1">order</span>
-                </td>
-
-                <!-- Total Belanja -->
-                <td class="px-6 py-5 text-right">
-                  <span class="font-oswald font-bold text-amber-400">{{ formatPrice(customer.total_spent) }}</span>
-                </td>
-
-                <!-- Kolom Diskon -->
-                <td class="px-6 py-5 text-center">
-                  <div v-if="customer.special_discount_percentage != null" class="flex flex-col items-center gap-0.5">
-                    <span class="font-oswald text-2xl font-bold text-red-500">{{ customer.special_discount_percentage }}%</span>
-                    <span class="text-[9px] uppercase tracking-widest text-white/25 font-bold">Khusus</span>
-                  </div>
-                  <div v-else-if="customer.is_loyal" class="flex flex-col items-center gap-0.5">
-                    <span class="font-oswald text-2xl font-bold text-emerald-400">{{ defaultDiscount }}%</span>
-                    <span class="text-[9px] uppercase tracking-widest text-white/25 font-bold">Member</span>
-                  </div>
-                  <span v-else class="text-white/15 text-sm font-bold">—</span>
-                </td>
-
-                <!-- Status -->
-                <td class="px-6 py-5 text-center">
-                  <span
-                    class="inline-block px-4 py-1.5 text-[10px] rounded-full font-bold uppercase tracking-widest border"
-                    :class="customer.is_loyal
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                      : 'bg-white/5 text-white/30 border-white/10'"
-                  >
-                    {{ customer.is_loyal ? "Loyal" : "Regular" }}
-                  </span>
-                </td>
-
-                <!-- Aksi -->
-                <td class="px-6 py-5 text-center">
-                  <button
-                    @click="openDiscountModal(customer)"
-                    :disabled="!customer.is_loyal"
-                    class="px-4 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all"
-                    :class="customer.is_loyal
-                      ? 'bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 hover:border-red-600'
-                      : 'bg-transparent text-white/15 border border-white/5 cursor-not-allowed'"
-                  >
-                    {{ customer.special_discount_percentage != null ? 'Edit Diskon' : 'Beri Diskon' }}
-                  </button>
-                </td>
-              </tr>
-
-              <tr v-if="loyalty.loyalCustomers.length === 0">
-                <td colspan="7" class="px-6 py-24 text-center">
-                  <p class="text-white/20 text-sm font-medium">Belum ada data pelanggan</p>
-                  <p class="text-white/10 text-xs mt-1">Data muncul setelah ada transaksi yang memenuhi syarat</p>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <div class="stat-card stat-green">
+        <div class="stat-top">
+          <span class="stat-label">Loyal Member</span>
+          <span class="stat-dot dot-green"></span>
         </div>
+        <div class="stat-val val-green">{{ loyalCount }}</div>
+        <div class="stat-note">memenuhi syarat bulan ini</div>
+      </div>
+      <div class="stat-card stat-amber">
+        <div class="stat-top">
+          <span class="stat-label">Dapat Diskon</span>
+          <span class="stat-dot dot-amber"></span>
+        </div>
+        <div class="stat-val val-amber">{{ discountedCount }}</div>
+        <div class="stat-note">diskon aktif (khusus/member)</div>
       </div>
     </div>
 
-    <!-- Modal Diskon -->
+    <!-- ── LOADING ─────────────────────────────────────────────────── -->
+    <div v-if="loyalty.loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Memuat data pelanggan...</p>
+    </div>
+
+    <!-- ── TABLE ──────────────────────────────────────────────────── -->
+    <div v-else class="table-card">
+      <div class="table-card-head">
+        <p class="card-eyebrow">Daftar Pelanggan</p>
+        <h3 class="card-title-sm">{{ loyalty.loyalCustomers.length }} customer terdaftar</h3>
+      </div>
+
+      <div class="table-scroll">
+        <table class="lc-table">
+          <thead>
+            <tr>
+              <th>Pelanggan</th>
+              <th>Periode</th>
+              <th class="th-center">Pesanan</th>
+              <th class="th-right">Total Belanja</th>
+              <th class="th-center">Diskon</th>
+              <th class="th-center">Status</th>
+              <th class="th-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="customer in loyalty.loyalCustomers"
+              :key="customer.phone"
+              class="lc-row"
+            >
+              <!-- Phone -->
+              <td class="td-phone">
+                <span class="phone-val">{{ customer.phone }}</span>
+              </td>
+
+              <!-- Periode -->
+              <td class="td-period">{{ customer.month || '—' }}</td>
+
+              <!-- Pesanan -->
+              <td class="td-center">
+                <span class="order-count">{{ customer.order_count || 0 }}</span>
+                <span class="order-unit">order</span>
+              </td>
+
+              <!-- Belanja -->
+              <td class="td-right td-spend">{{ formatPrice(customer.total_spent) }}</td>
+
+              <!-- Diskon -->
+              <td class="td-center">
+                <div v-if="customer.special_discount_percentage != null" class="discount-badge badge-red">
+                  <span class="discount-pct">{{ customer.special_discount_percentage }}%</span>
+                  <span class="discount-lbl">Khusus</span>
+                </div>
+                <div v-else-if="customer.is_loyal" class="discount-badge badge-green">
+                  <span class="discount-pct">{{ defaultDiscount }}%</span>
+                  <span class="discount-lbl">Member</span>
+                </div>
+                <span v-else class="no-discount">—</span>
+              </td>
+
+              <!-- Status -->
+              <td class="td-center">
+                <span class="status-pill" :class="customer.is_loyal ? 'pill-loyal' : 'pill-regular'">
+                  {{ customer.is_loyal ? 'Loyal' : 'Regular' }}
+                </span>
+              </td>
+
+              <!-- Aksi -->
+              <td class="td-center">
+                <button
+                  @click="openDiscountModal(customer)"
+                  :disabled="!customer.is_loyal"
+                  class="action-btn"
+                  :class="customer.is_loyal ? 'action-active' : 'action-disabled'"
+                >
+                  {{ customer.special_discount_percentage != null ? 'Edit Diskon' : 'Beri Diskon' }}
+                </button>
+              </td>
+            </tr>
+
+            <tr v-if="loyalty.loyalCustomers.length === 0">
+              <td colspan="7" class="empty-cell">
+                <div class="empty-icon">👥</div>
+                <p class="empty-text">Belum ada data pelanggan</p>
+                <p class="empty-hint">Data muncul setelah ada transaksi yang memenuhi syarat</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── MODAL DISKON ───────────────────────────────────────────── -->
     <transition
-      enter-active-class="duration-200" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100"
-      leave-active-class="duration-150" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95"
+      enter-active-class="modal-enter-active"
+      enter-from-class="modal-enter-from"
+      leave-active-class="modal-leave-active"
+      leave-to-class="modal-leave-to"
     >
       <div
         v-if="showDiscountModal"
-        class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        class="modal-overlay"
         @click.self="showDiscountModal = false"
       >
-        <div class="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 w-full max-w-sm space-y-5">
+        <div class="modal-box">
 
-          <div class="flex items-start justify-between">
+          <!-- Modal header -->
+          <div class="modal-header">
             <div>
-              <h3 class="font-oswald text-lg uppercase tracking-wide text-white">Atur Diskon Khusus</h3>
-              <p class="text-xs text-white/30 mt-0.5 font-mono">{{ selectedCustomer?.phone }}</p>
+              <p class="modal-eyebrow">Program Loyalitas</p>
+              <h3 class="modal-title">Atur Diskon Khusus</h3>
+              <p class="modal-phone">{{ selectedCustomer?.phone }}</p>
             </div>
-            <button @click="showDiscountModal = false" class="text-white/20 hover:text-white transition text-lg leading-none">✕</button>
+            <button class="modal-close" @click="showDiscountModal = false">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
           </div>
 
-          <!-- Info diskon saat ini -->
-          <div class="bg-white/5 rounded-xl p-4 space-y-1">
-            <p class="text-[10px] uppercase tracking-widest text-white/30 font-bold">Diskon Saat Ini</p>
-            <p class="font-oswald text-2xl font-bold" :class="selectedCustomer?.special_discount_percentage != null ? 'text-red-400' : 'text-emerald-400'">
-              {{ selectedCustomer?.special_discount_percentage != null
-                ? selectedCustomer.special_discount_percentage + '% (Khusus)'
-                : defaultDiscount + '% (Member Default)' }}
-            </p>
+          <!-- Diskon aktif saat ini -->
+          <div class="current-discount">
+            <p class="current-label">Diskon Aktif Saat Ini</p>
+            <div class="current-val-wrap">
+              <span
+                class="current-pct"
+                :class="selectedCustomer?.special_discount_percentage != null ? 'current-red' : 'current-green'"
+              >
+                {{ selectedCustomer?.special_discount_percentage != null
+                  ? selectedCustomer.special_discount_percentage + '%'
+                  : defaultDiscount + '%' }}
+              </span>
+              <span class="current-type">
+                {{ selectedCustomer?.special_discount_percentage != null ? 'Diskon Khusus' : 'Default Member' }}
+              </span>
+            </div>
           </div>
 
-          <div class="space-y-1.5">
-            <label class="text-[10px] uppercase font-bold tracking-widest text-white/40">
-              Diskon Baru (%)
-            </label>
+          <!-- Input -->
+          <div class="modal-field">
+            <label class="modal-field-label">Diskon Baru (%)</label>
             <input
               v-model.number="discountInput"
               type="number"
               min="0"
               max="100"
-              class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-red-600 transition"
               placeholder="Contoh: 25"
+              class="modal-input"
             />
-            <p class="text-[10px] text-white/20 px-1">Kosongkan dan simpan untuk reset ke default {{ defaultDiscount }}%</p>
+            <p class="modal-hint">Kosongkan untuk reset ke default ({{ defaultDiscount }}%)</p>
           </div>
 
-          <div class="flex gap-3">
-            <button
-              @click="saveSpecialPrice"
-              :disabled="isSaving"
-              class="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition"
-            >
-              {{ isSaving ? 'Menyimpan...' : 'Simpan' }}
+          <!-- Actions -->
+          <div class="modal-actions">
+            <button @click="saveSpecialPrice" :disabled="isSaving" class="modal-save-btn">
+              <span v-if="isSaving" class="btn-spinner"></span>
+              {{ isSaving ? 'Menyimpan...' : 'Simpan Diskon' }}
             </button>
-            <button
-              @click="showDiscountModal = false"
-              class="flex-1 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition"
-            >
-              Batal
-            </button>
+            <button @click="showDiscountModal = false" class="modal-cancel-btn">Batal</button>
           </div>
 
+          <!-- Reset -->
           <button
             v-if="selectedCustomer?.special_discount_percentage != null"
             @click="removeSpecialPrice(selectedCustomer); showDiscountModal = false"
-            class="w-full text-[10px] text-white/20 hover:text-red-400 transition text-center uppercase tracking-widest font-bold"
+            class="modal-reset-btn"
           >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+            </svg>
             Cabut diskon khusus → kembali ke {{ defaultDiscount }}%
           </button>
+
         </div>
       </div>
     </transition>
+
   </div>
 </template>
 
@@ -232,25 +244,22 @@ const discountInput     = ref(null);
 const isSaving          = ref(false);
 const defaultDiscount   = ref(0);
 
-// Fetch dari endpoint admin yang return special_discount_percentage + settings
 const fetchAdminLoyalData = async () => {
   try {
-    const res = await apiClient.get("/orders/loyal-customers/");
+    const res  = await apiClient.get("/orders/loyal-customers/");
     const data = res.data;
-    // Response: { settings: { discount_percentage: 20 }, customers: [...] }
     if (data?.customers) {
-      loyalty.loyalCustomers  = data.customers;
-      defaultDiscount.value   = parseFloat(data.settings?.discount_percentage ?? 0);
+      loyalty.loyalCustomers = data.customers;
+      defaultDiscount.value  = parseFloat(data.settings?.discount_percentage ?? 0);
     } else if (Array.isArray(data)) {
       loyalty.loyalCustomers = data;
     }
   } catch {
-    // fallback ke endpoint publik jika admin endpoint gagal
     loyalty.fetchLoyalCustomers();
   }
 };
 
-const loyalCount     = computed(() => loyalty.loyalCustomers.filter(c => c.is_loyal).length);
+const loyalCount      = computed(() => loyalty.loyalCustomers.filter(c => c.is_loyal).length);
 const discountedCount = computed(() => loyalty.loyalCustomers.filter(c => c.special_discount_percentage != null).length);
 
 const formatPrice = (price) =>
@@ -264,8 +273,7 @@ const openDiscountModal = (customer) => {
 
 const saveSpecialPrice = async () => {
   if (discountInput.value === null || discountInput.value === "") {
-    toast.error("Masukkan persentase diskon");
-    return;
+    toast.error("Masukkan persentase diskon"); return;
   }
   isSaving.value = true;
   try {
@@ -275,11 +283,8 @@ const saveSpecialPrice = async () => {
     toast.success(`Diskon ${discountInput.value}% disimpan untuk ${selectedCustomer.value.phone}`);
     showDiscountModal.value = false;
     fetchAdminLoyalData();
-  } catch {
-    toast.error("Gagal menyimpan diskon");
-  } finally {
-    isSaving.value = false;
-  }
+  } catch { toast.error("Gagal menyimpan diskon"); }
+  finally { isSaving.value = false; }
 };
 
 const removeSpecialPrice = async (customer) => {
@@ -287,9 +292,7 @@ const removeSpecialPrice = async (customer) => {
     await apiClient.delete(`/orders/give-special-price/${customer.phone}/`);
     toast.success(`Diskon khusus dicabut, kembali ke ${defaultDiscount.value}%`);
     fetchAdminLoyalData();
-  } catch {
-    toast.error("Gagal mencabut diskon");
-  }
+  } catch { toast.error("Gagal mencabut diskon"); }
 };
 
 const refreshData = () => fetchAdminLoyalData();
@@ -299,3 +302,339 @@ onMounted(() => {
   fetchAdminLoyalData();
 });
 </script>
+
+<style scoped>
+/* ── Root ─────────────────────────────────────────────────────────── */
+.lc-root {
+  min-height: 100vh;
+  background: #080808;
+  color: #fff;
+  padding: 2rem 1.5rem;
+  max-width: 1280px;
+  margin: 0 auto;
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+.lc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-wrap: wrap;
+}
+.lc-eyebrow {
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.6rem; letter-spacing: 0.2em;
+  text-transform: uppercase; color: #dc2626;
+  margin: 0 0 0.3rem;
+}
+.lc-title {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.75rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 0.3rem;
+}
+.lc-subtitle { font-size: 0.7rem; color: rgba(255,255,255,0.28); margin: 0; }
+
+.refresh-btn {
+  display: flex; align-items: center; gap: 0.45rem;
+  padding: 0.55rem 1rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; color: rgba(255,255,255,0.45);
+  font-family: 'Oswald', sans-serif; font-size: 0.68rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; transition: all 0.15s;
+}
+.refresh-btn:hover { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.15); }
+
+/* ── Stat grid ───────────────────────────────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 640px) { .stat-grid { grid-template-columns: 1fr; } }
+
+.stat-card {
+  background: #0f0f0f;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 16px; padding: 1.3rem 1.5rem;
+  position: relative; overflow: hidden;
+}
+.stat-card::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: rgba(255,255,255,0.06);
+}
+.stat-green::before { background: #22c55e; }
+.stat-amber::before { background: #f59e0b; }
+
+.stat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.65rem; }
+.stat-label {
+  font-family: 'Oswald', sans-serif; font-size: 0.62rem;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+}
+.stat-dot { width: 6px; height: 6px; border-radius: 50%; }
+.dot-white { background: rgba(255,255,255,0.2); }
+.dot-green { background: #22c55e; }
+.dot-amber { background: #f59e0b; }
+
+.stat-val {
+  font-family: monospace; font-size: 1.8rem; font-weight: 700;
+  color: #fff; letter-spacing: -0.02em; margin-bottom: 0.3rem;
+}
+.val-green { color: #4ade80; }
+.val-amber { color: #fbbf24; }
+.stat-note { font-size: 0.66rem; color: rgba(255,255,255,0.2); }
+
+/* ── Loading ─────────────────────────────────────────────────────── */
+.loading-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 1rem; padding: 5rem 2rem;
+  background: #0f0f0f; border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 16px;
+  color: rgba(255,255,255,0.25); font-family: 'Oswald', sans-serif;
+  font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase;
+}
+.spinner {
+  width: 28px; height: 28px;
+  border: 2px solid rgba(255,255,255,0.07); border-top-color: #dc2626;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Table card ──────────────────────────────────────────────────── */
+.table-card {
+  background: #0f0f0f;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 16px; overflow: hidden;
+}
+.table-card-head {
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.card-eyebrow {
+  font-family: 'Oswald', sans-serif; font-size: 0.58rem;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: #dc2626; margin: 0 0 0.15rem;
+}
+.card-title-sm {
+  font-family: 'Oswald', sans-serif; font-size: 0.82rem;
+  font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.08em; color: rgba(255,255,255,0.5); margin: 0;
+}
+
+.table-scroll { overflow-x: auto; }
+.lc-table { width: 100%; border-collapse: collapse; min-width: 700px; }
+
+.lc-table th {
+  padding: 0.65rem 1.25rem;
+  font-family: 'Oswald', sans-serif; font-size: 0.58rem; font-weight: 400;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(255,255,255,0.22); text-align: left;
+  background: rgba(255,255,255,0.015);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  white-space: nowrap;
+}
+.th-center { text-align: center; }
+.th-right  { text-align: right; }
+
+.lc-row {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.12s;
+}
+.lc-row:hover { background: rgba(255,255,255,0.02); }
+.lc-row:last-child { border-bottom: none; }
+
+.lc-table td { padding: 0.9rem 1.25rem; font-size: 0.83rem; vertical-align: middle; }
+
+.td-phone .phone-val { font-family: monospace; font-weight: 700; color: #fff; letter-spacing: 0.04em; }
+.td-period { font-size: 0.75rem; color: rgba(255,255,255,0.35); font-family: monospace; }
+.td-center { text-align: center; }
+.td-right  { text-align: right; }
+.td-spend  { font-family: monospace; font-weight: 700; color: #fbbf24; }
+
+.order-count { font-family: monospace; font-size: 1.1rem; font-weight: 700; color: #fff; }
+.order-unit  { font-size: 0.65rem; color: rgba(255,255,255,0.25); margin-left: 0.25rem; }
+
+/* Discount badge */
+.discount-badge {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 0.1rem;
+  padding: 0.25rem 0.65rem; border-radius: 8px;
+}
+.badge-red  { background: rgba(220,38,38,0.08);  border: 1px solid rgba(220,38,38,0.18); }
+.badge-green{ background: rgba(34,197,94,0.08);  border: 1px solid rgba(34,197,94,0.18); }
+.discount-pct {
+  font-family: 'Oswald', sans-serif; font-size: 1rem; font-weight: 600; line-height: 1;
+}
+.badge-red  .discount-pct { color: #f87171; }
+.badge-green .discount-pct { color: #4ade80; }
+.discount-lbl {
+  font-size: 0.5rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: rgba(255,255,255,0.25); font-family: 'Oswald', sans-serif;
+}
+.no-discount { color: rgba(255,255,255,0.15); font-size: 0.85rem; }
+
+/* Status pill */
+.status-pill {
+  display: inline-block; padding: 0.22rem 0.7rem;
+  border-radius: 100px; font-size: 0.6rem;
+  font-family: 'Oswald', sans-serif; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.pill-loyal   { background: rgba(34,197,94,0.1);  color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+.pill-regular { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.08); }
+
+/* Action button */
+.action-btn {
+  padding: 0.35rem 0.85rem; border-radius: 8px;
+  font-family: 'Oswald', sans-serif; font-size: 0.62rem;
+  letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+  transition: all 0.15s; border: 1px solid;
+}
+.action-active {
+  background: rgba(220,38,38,0.08); border-color: rgba(220,38,38,0.25); color: #f87171;
+}
+.action-active:hover { background: #dc2626; border-color: #dc2626; color: #fff; }
+.action-disabled {
+  background: transparent; border-color: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.12); cursor: not-allowed;
+}
+
+/* Empty state */
+.empty-cell { padding: 4rem !important; text-align: center; }
+.empty-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+.empty-text { color: rgba(255,255,255,0.28); font-size: 0.85rem; margin: 0 0 0.3rem; }
+.empty-hint { color: rgba(255,255,255,0.15); font-size: 0.7rem; margin: 0; }
+
+/* ── Modal ───────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.modal-enter-active { transition: all 0.2s ease; }
+.modal-enter-from   { opacity: 0; transform: scale(0.95); }
+.modal-leave-active { transition: all 0.15s ease; }
+.modal-leave-to     { opacity: 0; transform: scale(0.95); }
+
+.modal-box {
+  background: #0f0f0f; border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px; padding: 1.75rem;
+  width: 100%; max-width: 400px;
+  display: flex; flex-direction: column; gap: 1.25rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.modal-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+}
+.modal-eyebrow {
+  font-family: 'Oswald', sans-serif; font-size: 0.58rem;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: #dc2626; margin: 0 0 0.2rem;
+}
+.modal-title {
+  font-family: 'Oswald', sans-serif; font-size: 1.1rem;
+  font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 0.2rem;
+}
+.modal-phone { font-family: monospace; font-size: 0.78rem; color: rgba(255,255,255,0.35); margin: 0; }
+.modal-close {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.modal-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* Current discount display */
+.current-discount {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px; padding: 1rem 1.1rem;
+}
+.current-label {
+  font-family: 'Oswald', sans-serif; font-size: 0.58rem;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(255,255,255,0.28); margin: 0 0 0.4rem;
+}
+.current-val-wrap { display: flex; align-items: baseline; gap: 0.6rem; }
+.current-pct {
+  font-family: 'Oswald', sans-serif; font-size: 1.6rem; font-weight: 600;
+}
+.current-red   { color: #f87171; }
+.current-green { color: #4ade80; }
+.current-type  { font-size: 0.7rem; color: rgba(255,255,255,0.3); }
+
+/* Modal field */
+.modal-field { display: flex; flex-direction: column; gap: 0.4rem; }
+.modal-field-label {
+  font-family: 'Oswald', sans-serif; font-size: 0.58rem;
+  letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.3);
+}
+.modal-input {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; padding: 0.75rem 1rem;
+  color: #fff; font-family: monospace; font-size: 0.95rem;
+  outline: none; transition: border-color 0.15s;
+}
+.modal-input::placeholder { color: rgba(255,255,255,0.15); }
+.modal-input:focus { border-color: rgba(220,38,38,0.45); }
+.modal-hint { font-size: 0.65rem; color: rgba(255,255,255,0.2); margin: 0; }
+
+/* Modal actions */
+.modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.modal-save-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+  padding: 0.8rem; border-radius: 10px; border: none;
+  background: #dc2626; color: #fff;
+  font-family: 'Oswald', sans-serif; font-size: 0.72rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; transition: background 0.15s;
+}
+.modal-save-btn:hover:not(:disabled) { background: #b91c1c; }
+.modal-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.modal-cancel-btn {
+  padding: 0.8rem; border-radius: 10px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.45);
+  font-family: 'Oswald', sans-serif; font-size: 0.72rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; transition: all 0.15s;
+}
+.modal-cancel-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+.modal-reset-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.35rem;
+  width: 100%; background: none; border: none;
+  color: rgba(255,255,255,0.2);
+  font-family: 'Oswald', sans-serif; font-size: 0.6rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; transition: color 0.15s; padding: 0.25rem;
+}
+.modal-reset-btn:hover { color: #f87171; }
+
+/* Spinner */
+.btn-spinner {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+  animation: spin 0.75s linear infinite; flex-shrink: 0;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .lc-root { padding: 1.25rem 1rem; }
+  .lc-header { flex-direction: column; align-items: flex-start; }
+  .lc-title { font-size: 1.4rem; }
+}
+
+/* Hide number spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+</style>

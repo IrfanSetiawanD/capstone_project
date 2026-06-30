@@ -7,7 +7,18 @@ from cloudinary.models import CloudinaryField
 
 
 class Category(models.Model):
+    GROUP_CHOICES = [
+        ("makanan", "Makanan"),
+        ("snack", "Snack"),
+        ("minuman", "Minuman"),
+    ]
+
     name = models.CharField(max_length=50)
+    group = models.CharField(
+        max_length=20,
+        choices=GROUP_CHOICES,
+        default="makanan"
+    )
 
     def __str__(self):
         return self.name
@@ -24,7 +35,6 @@ class Menu(models.Model):
     image        = CloudinaryField('image', folder='menus/', null=True, blank=True)
 
     def save(self, *args, **kwargs):
-        # Markup 1%, bulatkan ke kelipatan 500 terdekat ke atas
         self.price_web = math.ceil((float(self.price) * 1.01) / 500) * 500
         super().save(*args, **kwargs)
 

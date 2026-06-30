@@ -20,6 +20,7 @@ from .views import (
     order_history,
     finance_monthly_summary,
     finance_daily_summary,
+    StoreSettingsView,
 )
 from .finance_excel import export_finance_excel_view
 from .finance_pdf import export_finance_pdf_view
@@ -61,6 +62,8 @@ urlpatterns = [
 
     # ── Active orders (prefix berbeda) ────────────────────────────────────────
     path("active-orders/",   active_orders_per_day, name="active-orders"),
+
+    path("orders/settings/", StoreSettingsView.as_view(), name="store-settings"),
 
     # ── Detail & pay — HARUS PALING BAWAH karena pakai <int:pk> ─────────────
     path("orders/<int:pk>/",      get_order, name="order-detail"),

@@ -25,38 +25,112 @@
     <div class="space-y-6">
 
       <!-- 01. HERO SECTION -->
-      <div class="bg-[#0F0F0F] border border-white/5 rounded-xl p-6 space-y-4">
-        <h2 class="font-sora text-sm font-bold uppercase tracking-wider text-[#DC2626] flex items-center gap-2">
-          <span>01.</span> Hero Section (100vh)
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="space-y-1.5">
-            <label class="text-white/40 uppercase font-bold tracking-wider">Headline Utama</label>
-            <input v-model="form.hero_headline" type="text" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white font-sora font-bold" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-white/40 uppercase font-bold tracking-wider">Sub-Headline Singkat</label>
-            <input v-model="form.hero_subheadline" type="text" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white" />
-          </div>
+<div class="bg-[#0F0F0F] border border-white/5 rounded-xl p-6 space-y-4">
+  <h2 class="font-sora text-sm font-bold uppercase tracking-wider text-[#DC2626] flex items-center gap-2">
+    <span>01.</span> Hero Section (100vh)
+  </h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+    <div class="space-y-1.5">
+      <label class="text-white/40 uppercase font-bold tracking-wider">Headline Utama</label>
+      <input v-model="form.hero_headline" type="text"
+        class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white font-sora font-bold" />
+    </div>
+    <div class="space-y-1.5">
+      <label class="text-white/40 uppercase font-bold tracking-wider">Sub-Headline Singkat</label>
+      <input v-model="form.hero_subheadline" type="text"
+        class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white" />
+    </div>
 
-          <div class="space-y-1.5 md:col-span-2">
-            <label class="text-white/40 uppercase font-bold tracking-wider">Foto Makanan Utama (Besar Kanan)</label>
-            <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
-              <div class="w-32 aspect-[16/10] bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
-                <img v-if="form.hero_food_image" :src="form.hero_food_image" class="w-full h-full object-cover" alt="Preview Hero" />
-                <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
-              </div>
-              <div class="space-y-2 w-full">
-                <input type="text" v-model="form.hero_food_image" readonly class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed" placeholder="URL Cloudinary terisi otomatis..." />
-                <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
-                  Pilih & Potong Foto (16:9)
-                  <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'hero')" />
-                </label>
-              </div>
-            </div>
+    <!-- FOTO BACKGROUND PARALLAX (16:9) -->
+    <div class="space-y-1.5 md:col-span-2">
+      <label class="text-white/40 uppercase font-bold tracking-wider">
+        Foto Background Parallax Hero (16:9)
+      </label>
+      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
+        <!-- Klik foto = buka cropper langsung -->
+        <div
+          @click="triggerImageCrop(null, 'hero_bg')"
+          class="w-32 aspect-video bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
+          title="Klik untuk ganti foto"
+        >
+          <img v-if="form.hero_bg_image" :src="form.hero_bg_image"
+            class="w-full h-full object-cover group-hover:opacity-60 transition" />
+          <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+            <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
           </div>
         </div>
+        <div class="space-y-2 w-full">
+          <input type="text" :value="form.hero_bg_image" readonly
+            class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed"
+            placeholder="URL Cloudinary terisi otomatis..." />
+          <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
+            Pilih & Potong Foto Background (16:9)
+            <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'hero_bg')" />
+          </label>
+        </div>
       </div>
+    </div>
+
+    <!-- FOTO MAKANAN KOTAK KANAN (1:1) -->
+    <div class="space-y-1.5 md:col-span-2">
+      <label class="text-white/40 uppercase font-bold tracking-wider">
+        Foto Makanan Kotak Kanan Hero (1:1)
+      </label>
+      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
+        <!-- Klik foto = buka cropper langsung -->
+        <div
+          @click="triggerImageCrop(null, 'hero_food')"
+          class="w-32 aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
+          title="Klik untuk ganti foto"
+        >
+          <img v-if="form.hero_food_image" :src="form.hero_food_image"
+            class="w-full h-full object-cover group-hover:opacity-60 transition" />
+          <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+            <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
+          </div>
+        </div>
+        <div class="space-y-2 w-full">
+          <input type="text" :value="form.hero_food_image" readonly
+            class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed"
+            placeholder="URL Cloudinary terisi otomatis..." />
+          <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
+            Pilih & Potong Foto Makanan (1:1)
+            <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'hero_food')" />
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOTO ABOUT (1:1) — sama, tambah klik foto -->
+    <div class="space-y-1.5 md:col-span-2">
+      <label class="text-white/40 uppercase font-bold tracking-wider">Foto Outlet Suasana Kedai (1:1)</label>
+      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
+        <div
+          @click="triggerImageCrop(null, 'about')"
+          class="w-24 aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
+        >
+          <img v-if="form.about_image" :src="form.about_image"
+            class="w-full h-full object-cover group-hover:opacity-60 transition" />
+          <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+            <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
+          </div>
+        </div>
+        <div class="space-y-2 w-full">
+          <input type="text" :value="form.about_image" readonly
+            class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed"
+            placeholder="URL Cloudinary terisi otomatis..." />
+          <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
+            Pilih & Potong Foto (1:1)
+            <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'about')" />
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
       <!-- 02. AKSEN TEKS BERJALAN -->
       <div class="bg-[#0F0F0F] border border-white/5 rounded-xl p-6 space-y-4">
@@ -296,6 +370,7 @@ import {
   Coffee, Wifi, Zap, Utensils, DollarSign, Moon, Shield, Tv, 
   Music, Gamepad2, Beer, BatteryCharging, Heart, Award, Smartphone 
 } from "lucide-vue-next";
+const fileInputRef = ref(null)
 
 // Objek mapping icon agar bisa di-looping di template
 const iconMap = {
@@ -320,15 +395,16 @@ const cropType = ref("hero");
 // Form Teks Utama 01-04
 const form = ref({
   hero_headline: "Warkop Level Up Masashimura",
-  hero_subheadline: "Tempat nongkrong kasual modern di Bekasi dengan cita rasa nikmat.",
-  hero_food_image: null,
+  hero_subheadline: "Tempat nongkrong kasual modern di Bekasi.",
+  hero_bg_image: null,    // ← baru — background parallax
+  hero_food_image: null,  // ← existing — foto kotak kanan
   marquee_text: "MASA SIH MURAH? • WARKOP EVOLUTION • GOOD FOOD • GOOD VIBES",
   about_text: "",
   about_image: null,
   metric_1: "2021",
   metric_2: "50+",
   metric_3: "★★★★★",
-});
+})
 
 // State Sub-Modul 05 & 06 Dinamis
 const bentoFacilities = ref([]);
@@ -382,35 +458,54 @@ const saveHomepageData = async () => {
 
 // ================= ENGINE CLOUDINARY FOR CROPPER & GALLERY =================
 const triggerImageCrop = (event, type) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  cropType.value = type;
-  imageSrc.value = URL.createObjectURL(file);
-  isCropping.value = true;
-};
+  cropType.value = type
+
+  if (event === null) {
+    // Klik dari foto preview — buat hidden input secara programatis
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = (e) => {
+      const file = e.target.files[0]
+      if (!file) return
+      imageSrc.value = URL.createObjectURL(file)
+      isCropping.value = true
+    }
+    input.click()
+    return
+  }
+
+  // Dari input file biasa
+  const file = event.target.files[0]
+  if (!file) return
+  imageSrc.value = URL.createObjectURL(file)
+  isCropping.value = true
+}
 
 onBeforeUnmount(() => {
   if (imageSrc.value) URL.revokeObjectURL(imageSrc.value);
 });
 
 const handleUploadToCloudinary = async (blobData) => {
-  isCropping.value = false;
-  const toastId = toast.loading("Sedang mengupload potongan foto ke Cloudinary...");
-  const formData = new FormData();
-  formData.append("file", blobData);
-  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  isCropping.value = false
+  const toastId = toast.loading("Mengupload foto ke Cloudinary...")
+  const formData = new FormData()
+  formData.append("file", blobData)
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET)
 
   try {
-    const { data } = await axios.post(CLOUDINARY_UPLOAD_URL, formData);
+    const { data } = await axios.post(CLOUDINARY_UPLOAD_URL, formData)
     if (data?.secure_url) {
-      if (cropType.value === "hero") form.value.hero_food_image = data.secure_url;
-      else if (cropType.value === "about") form.value.about_image = data.secure_url;
-      toast.success("Foto berhasil terintegrasi dengan CDN Cloudinary!", { id: toastId });
+      if (cropType.value === "hero_bg")   form.value.hero_bg_image   = data.secure_url
+      if (cropType.value === "hero_food") form.value.hero_food_image = data.secure_url
+      if (cropType.value === "hero")      form.value.hero_food_image = data.secure_url // legacy
+      if (cropType.value === "about")     form.value.about_image     = data.secure_url
+      toast.success("Foto berhasil diupload!", { id: toastId })
     }
-  } catch (err) {
-    toast.error("Gagal mengupload gambar via preset Cloudinary.", { id: toastId });
+  } catch {
+    toast.error("Gagal upload gambar.", { id: toastId })
   }
-};
+}
 
 // Khusus upload foto galeri langsung di modal tanpa crop biar cepet
 const uploadGalleryToCloudinary = async (event) => {

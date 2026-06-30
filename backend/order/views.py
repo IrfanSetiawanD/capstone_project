@@ -1,14 +1,3 @@
-"""
-orders/views.py
-===============
-Semua view untuk modul Orders:
-  - CRUD Order
-  - Loyalty (publik & admin)
-  - Reports & Dashboard
-  - Export Excel & PDF (menggunakan finance_excel.py & finance_pdf.py)
-  - Unpaid Orders & History
-"""
-
 from django.db import transaction, models
 from django.db.models import Count, Sum, Max
 from django.http import HttpResponse
@@ -29,9 +18,9 @@ from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Order, OrderItem, CustomerLoyalty, LoyaltySettings, PAYMENT_METHOD_CHOICES
+from .models import Order, OrderItem, CustomerLoyalty, LoyaltySettings, PAYMENT_METHOD_CHOICES, StoreSettings
 from menu.models import Menu
-from .serializers import OrderSerializer, LoyaltySettingsSerializer
+from .serializers import OrderSerializer, LoyaltySettingsSerializer, StoreSettingsSerializer
 
 
 # ─────────────────────────────────────────────
@@ -1006,3 +995,20 @@ def order_full_report(request):
         },
         "jam_teramai": jam_teramai,
     })
+
+class StoreSettingsView(APIView):
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAdminUser()]
+ 
+    def get(self, request):
+        settings = StoreSettings.get()
+        return Response(StoreSettingsSerializer(settings).data)
+ 
+    def put(self, request):
+        settings   = StoreSettings.get()
+        serializer = StoreSettingsSerializer(settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

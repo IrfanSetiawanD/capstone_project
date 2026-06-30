@@ -11,6 +11,7 @@ class HomepageConfig(models.Model):
     hero_headline = models.CharField(max_length=255, default="Warkop Level Up Masashimura", blank=True, null=True)
     hero_subheadline = models.TextField(default="Tempat nongkrong kasual modern di Bekasi dengan cita rasa nikmat.", blank=True, null=True)
     hero_food_image = models.URLField(max_length=500, blank=True, null=True)
+    hero_bg_image = models.URLField(blank=True, null=True, help_text="Foto background parallax hero (16:9)")
     
     # Marquee Text
     marquee_text = models.TextField(default="MASA SIH MURAH? • WARKOP EVOLUTION • GOOD FOOD • GOOD VIBES", blank=True, null=True)
