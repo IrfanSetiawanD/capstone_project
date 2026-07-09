@@ -16,10 +16,18 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     if (config.url.includes("/login/")) return config;
+
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Token ${token}`;
     }
+
+    // Kalau body-nya FormData (upload file), JANGAN paksa Content-Type json.
+    // Biarkan browser yang set otomatis multipart/form-data + boundary-nya.
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

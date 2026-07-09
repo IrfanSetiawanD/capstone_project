@@ -3,11 +3,18 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.db.models import Sum, Q
-import cloudinary.uploader
+from django.db.models.deletion import ProtectedError
+from rest_framework import viewsets, status
 
-from .models import Menu
-from .serializers import MenuSerializer
+from .models import Menu, Category
+from .serializers import MenuSerializer, CategorySerializer
 from order.permissions import PublicReadStaffWrite
+
+
+class CategoryViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [PublicReadStaffWrite]
 
 
 class MenuViewSet(viewsets.ModelViewSet):
@@ -15,33 +22,36 @@ class MenuViewSet(viewsets.ModelViewSet):
     serializer_class = MenuSerializer
     permission_classes = [PublicReadStaffWrite]
 
-    def perform_update(self, serializer):
-        """
-        Kalau ada gambar baru dikirim saat update, hapus gambar lama
-        di Cloudinary dulu sebelum data baru disimpan.
-        """
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError:
+            instance.is_active = False
+            instance.is_available = False
+            instance.save()
+
+    def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        new_image = self.request.FILES.get('image')
-
-        if new_image and instance.image:
-            try:
-                cloudinary.uploader.destroy(instance.image.public_id)
-            except Exception as e:
-                print(f"[Cloudinary] Gagal hapus gambar lama Menu id={instance.pk}: {e}")
-
-        serializer.save()
-
-    # perform_destroy TIDAK perlu di-override.
-    # Penghapusan gambar Cloudinary saat delete sudah otomatis
-    # ditangani oleh signal post_delete di models.py — jadi tidak dobel.
+        try:
+            instance.delete()
+            return Response(
+                {"detail": "Menu berhasil dihapus."},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        except ProtectedError:
+            instance.is_active = False
+            instance.is_available = False
+            instance.save()
+            return Response(
+                {"detail": "Menu memiliki riwayat order, dinonaktifkan.", "deactivated": True},
+                status=status.HTTP_200_OK
+            )
 
 
 class TopBestSellersMenuView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        # 1. Annotate & filter menu berdasarkan jumlah terjual,
-        #    hanya hitung quantity dari order yang sudah completed
         top_menus = (
             Menu.objects.annotate(
                 total_ordered=Sum(
@@ -53,7 +63,6 @@ class TopBestSellersMenuView(APIView):
             .order_by('-total_ordered')[:3]
         )
 
-        # 2. Fallback jika belum ada yang terjual
         if not top_menus.exists():
             top_menus = Menu.objects.filter(is_active=True, is_available=True)[:3]
 

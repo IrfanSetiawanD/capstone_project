@@ -94,6 +94,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db_masashimura_dev.sqlite3',
+        'OPTIONS': {
+            'timeout': 20,
+        },
     }
 }
 AUTH_PASSWORD_VALIDATORS = [

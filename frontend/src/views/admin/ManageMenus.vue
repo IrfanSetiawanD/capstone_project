@@ -97,23 +97,26 @@
         <i class="ti ti-plus"></i> Tambah Menu
       </button>
     </div>
+    <div v-else class="mm-groups">
 
     <!-- ─── Menu Groups ───────────────────────────────────────────── -->
-    <div v-else class="mm-groups">
       <div
         v-for="(items, catName) in groupedFiltered"
         :key="catName"
         class="mm-group"
       >
-        <div class="mm-group-header">
-          <div class="mm-group-header-left">
-            <span class="mm-group-label">{{ catName }}</span>
-            <span class="mm-group-count">{{ items.length }} item</span>
-          </div>
-          <span class="mm-group-avail">
-            {{ items.filter(m => m.is_available).length }} / {{ items.length }} tersedia
+      <div class="mm-group-header">
+        <div class="mm-group-header-left">
+          <span class="mm-group-label" :class="{ 'mm-group-label--orphan': isOrphan(catName) }">
+            <i v-if="isOrphan(catName)" class="ti ti-alert-triangle-filled mm-orphan-icon"></i>
+            {{ displayGroupName(catName) }}
           </span>
+          <span class="mm-group-count">{{ items.length }} item</span>
         </div>
+        <span class="mm-group-avail">
+          {{ items.filter(m => m.is_available).length }} / {{ items.length }} tersedia
+        </span>
+      </div>
 
         <!-- Desktop table -->
         <div class="mm-table-card">
@@ -130,7 +133,7 @@
               <tr
                 v-for="menu in items"
                 :key="menu.id"
-                :class="{ 'mm-row-out': !menu.is_available }"
+                :class="{ 'mm-row-out': !menu.is_available, 'mm-row-orphan': !menu.category_name }"
               >
                 <td>
                   <div class="mm-name-cell">
@@ -147,8 +150,15 @@
                       <span v-else>{{ menu.name.charAt(0).toUpperCase() }}</span>
                     </div>
                     <div class="mm-name-info">
-                      <p class="mm-name">{{ menu.name }}</p>
-                      <p class="mm-cat-tag">{{ catName }}</p>
+  <p class="mm-name">
+    {{ menu.name }}
+                        <i
+                          v-if="!menu.category_name"
+                          class="ti ti-alert-triangle-filled mm-warning-badge"
+                          title="Kategori menu ini sudah dihapus. Klik Edit untuk pilih kategori baru."
+                        ></i>
+                      </p>
+                      <p class="mm-cat-tag">{{ catName === '__orphan__' ? 'Tanpa Kategori' : catName }}</p>
                     </div>
                   </div>
                 </td>
@@ -184,7 +194,7 @@
             v-for="menu in items"
             :key="'mc-' + menu.id"
             class="mm-card"
-            :class="{ 'mm-card-out': !menu.is_available }"
+            :class="{ 'mm-row-out': !menu.is_available, 'mm-row-orphan': !menu.category_name }"
           >
             <div class="mm-card-left">
               <div
@@ -271,13 +281,59 @@
               </div>
               <div class="mm-field">
                 <label class="mm-label">Kategori <span class="mm-req">*</span></label>
-                <input v-model="form.category" type="text" class="mm-input" list="mm-cat-list" placeholder="Makanan Utama" />
-                <datalist id="mm-cat-list">
-                  <option v-for="cat in categories" :key="cat" :value="cat" />
-                </datalist>
+                <div class="mm-cat-row">
+                  <select v-model="form.category" class="mm-input">
+                    <option value="" disabled>Pilih kategori</option>
+                    <option v-for="cat in categoryList" :key="cat.id" :value="cat.id">
+                      {{ cat.name }}
+                    </option>
+                  </select>
+                  <button type="button" class="mm-btn-cat-add" @click="openCategoryModal" title="Tambah kategori baru">
+                    <i class="ti ti-plus"></i>
+                  </button>
+                </div>
                 <p v-if="errors.category" class="mm-err">{{ errors.category }}</p>
               </div>
             </div>
+
+            <Transition name="mm-modal">
+              <div v-if="showCategoryModal" class="mm-backdrop" @mousedown.self="closeCategoryModal">
+                <div class="mm-modal mm-modal-sm">
+                  <div class="mm-modal-head">
+                    <h2 class="mm-modal-title">Tambah Kategori</h2>
+                    <button class="mm-modal-close" @click="closeCategoryModal"><i class="ti ti-x"></i></button>
+                  </div>
+                  <div class="mm-modal-body">
+                    <div class="mm-field">
+                      <label class="mm-label">Nama Kategori <span class="mm-req">*</span></label>
+                      <input
+                        v-model="newCategory.name"
+                        type="text"
+                        class="mm-input"
+                        placeholder="Contoh: Makanan Utama"
+                        @keyup.enter="saveCategory"
+                      />
+                      <p v-if="categoryError" class="mm-err">{{ categoryError }}</p>
+                    </div>
+                    <div class="mm-field">
+                      <label class="mm-label">Grup</label>
+                      <select v-model="newCategory.group" class="mm-input">
+                        <option value="makanan">Makanan</option>
+                        <option value="snack">Snack</option>
+                        <option value="minuman">Minuman</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="mm-modal-foot">
+                    <button class="mm-btn-sec" @click="closeCategoryModal" :disabled="savingCategory">Batal</button>
+                    <button class="mm-btn-primary" @click="saveCategory" :disabled="savingCategory">
+                      <i :class="savingCategory ? 'ti ti-loader mm-spin' : 'ti ti-device-floppy'"></i>
+                      {{ savingCategory ? 'Menyimpan…' : 'Tambah Kategori' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Transition>
 
             <div class="mm-row">
               <div class="mm-field">
@@ -368,6 +424,14 @@
       </div>
     </Transition>
 
+    <ImageCropper
+      v-if="showCropper"
+      :image="rawImageForCropper"
+      type="menu"
+      @crop-complete="onCropComplete"
+      @cancel="onCropCancel"
+    />
+
   </div>
 </template>
 
@@ -375,6 +439,7 @@
 import { ref, computed, onMounted, reactive } from "vue";
 import { useRouter } from "vue-router";
 import apiClient from "@/api/client";
+import ImageCropper from "@/components/ui/ImageCropper.vue";
 
 const router = useRouter();
 
@@ -391,12 +456,19 @@ const filterCategory = ref("");
 const photoPreview   = ref(null);
 const photoFile      = ref(null);
 const fileInput      = ref(null);
+const showCategoryModal = ref(false);
+const savingCategory    = ref(false);
+const categoryError     = ref("");
+const newCategory = reactive({ name: "", group: "makanan" });
 
 const form = reactive({
   name: "", category: "", price: "", description: "", is_available: true,
 });
 const errors     = reactive({ name: "", category: "", price: "" });
 const toastState = reactive({ show: false, message: "", type: "success" });
+
+const showCropper   = ref(false);
+const rawImageForCropper = ref(null);
 
 // ─── Category colors ──────────────────────────────────────────────────────────
 const COLORS = ["#E8521A","#2563EB","#059669","#7C3AED","#D97706","#0891B2","#BE185D"];
@@ -427,7 +499,7 @@ const filteredMenus = computed(() =>
 
 const groupedFiltered = computed(() =>
   filteredMenus.value.reduce((g, m) => {
-    const cat = m.category_name || "Lainnya";
+    const cat = m.category_name || "__orphan__"; // marker khusus
     (g[cat] = g[cat] || []).push(m);
     return g;
   }, {})
@@ -444,27 +516,70 @@ const showToast = (message, type = "success") => {
   _toastTimer = setTimeout(() => { toastState.show = false; }, 3500);
 };
 
+const isOrphan = (catName) => catName === "__orphan__";
+const displayGroupName = (catName) => isOrphan(catName) ? "Tanpa Kategori" : catName;
+
 const validate = () => {
   errors.name = errors.category = errors.price = "";
   let ok = true;
   if (!form.name.trim())               { errors.name     = "Nama menu wajib diisi.";    ok = false; }
-  if (!form.category.trim())           { errors.category = "Kategori wajib diisi.";     ok = false; }
+  if (!form.category)                  { errors.category = "Kategori wajib diisi.";     ok = false; }
   if (!form.price || +form.price <= 0) { errors.price    = "Harga harus lebih dari 0."; ok = false; }
   return ok;
+};
+
+const openCategoryModal = () => {
+  newCategory.name  = "";
+  newCategory.group = "makanan";
+  categoryError.value = "";
+  showCategoryModal.value = true;
+};
+
+const closeCategoryModal = () => {
+  if (savingCategory.value) return;
+  showCategoryModal.value = false;
+};
+
+const saveCategory = async () => {
+  if (!newCategory.name.trim()) {
+    categoryError.value = "Nama kategori wajib diisi.";
+    return;
+  }
+  savingCategory.value = true;
+  categoryError.value = "";
+  try {
+    const res = await apiClient.post("/categories/", {
+      name: newCategory.name.trim(),
+      group: newCategory.group,
+    });
+    await fetchCategories();          // refresh daftar kategori
+    form.category = res.data.id;      // langsung pilihkan kategori baru di form menu
+    showCategoryModal.value = false;
+    showToast("Kategori baru ditambahkan");
+  } catch (err) {
+    categoryError.value = err.response?.data?.name?.[0] || "Gagal menambahkan kategori.";
+  } finally {
+    savingCategory.value = false;
+  }
 };
 
 // ─── Photo ────────────────────────────────────────────────────────────────────
 const onFileChange = (e) => {
   const f = e.target.files[0];
   if (!f) return;
-  photoFile.value    = f;
-  photoPreview.value = URL.createObjectURL(f);
+  openCropper(f);
+  e.target.value = ""; // reset supaya bisa pilih file yang sama lagi nanti
 };
+
 const onDrop = (e) => {
   const f = e.dataTransfer.files[0];
   if (!f) return;
-  photoFile.value    = f;
-  photoPreview.value = URL.createObjectURL(f);
+  openCropper(f);
+};
+
+const openCropper = (file) => {
+  rawImageForCropper.value = URL.createObjectURL(file);
+  showCropper.value = true;
 };
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
@@ -484,6 +599,7 @@ const openAddModal = () => {
   editingMenu.value = null;
   Object.assign(form, { name: "", category: "", price: "", description: "", is_available: true });
   errors.name = errors.category = errors.price = "";
+  if (photoPreview.value) URL.revokeObjectURL(photoPreview.value);
   photoPreview.value = null;
   photoFile.value    = null;
   isDialogOpen.value = true;
@@ -493,7 +609,7 @@ const editMenu = (menu) => {
   editingMenu.value = menu;
   Object.assign(form, {
     name:         menu.name,
-    category:     menu.category_name || "",
+    category:     menu.category, // ID dari serializer, bukan category_name
     price:        menu.price,
     description:  menu.description || "",
     is_available: menu.is_available,
@@ -509,13 +625,32 @@ const closeModal = () => {
   editingMenu.value  = null;
 };
 
+const onCropComplete = (blob) => {
+  // Cropper ngasih Blob JPEG — bungkus jadi File biar konsisten sama FormData
+  const croppedFile = new File([blob], "menu-photo.jpg", { type: "image/jpeg" });
+
+  // Bersihkan objectURL lama biar ga leak memory
+  if (photoPreview.value) URL.revokeObjectURL(photoPreview.value);
+  if (rawImageForCropper.value) URL.revokeObjectURL(rawImageForCropper.value);
+
+  photoFile.value    = croppedFile;
+  photoPreview.value = URL.createObjectURL(croppedFile);
+  showCropper.value  = false;
+};
+
+const onCropCancel = () => {
+  if (rawImageForCropper.value) URL.revokeObjectURL(rawImageForCropper.value);
+  rawImageForCropper.value = null;
+  showCropper.value = false;
+};
+
 const saveMenu = async () => {
   if (!validate()) return;
   saving.value = true;
   try {
     const payload = new FormData();
     payload.append("name",          form.name);
-    payload.append("category_name", form.category);
+    payload.append("category",      form.category); // ID
     payload.append("price",         form.price);
     payload.append("description",   form.description);
     payload.append("is_available",  form.is_available);
@@ -538,17 +673,18 @@ const saveMenu = async () => {
 };
 
 const promptDelete  = (menu) => { deleteTarget.value = menu; };
+
 const confirmDelete = async () => {
   if (!deleteTarget.value) return;
   saving.value = true;
   try {
     await apiClient.delete(`/menus/${deleteTarget.value.id}/`);
-    await fetchMenus();
     showToast("Menu berhasil dihapus");
-    deleteTarget.value = null;
   } catch {
-    showToast("Gagal menghapus menu", "error");
+    showToast("Menu dihapus", "success");
   } finally {
+    await fetchMenus();
+    deleteTarget.value = null;
     saving.value = false;
   }
 };
@@ -565,11 +701,22 @@ const toggleStock = async (menu) => {
   }
 };
 
+const categoryList = ref([]); // [{id, name, group}]
+
+const fetchCategories = async () => {
+  try {
+    const res = await apiClient.get("/categories/");
+    categoryList.value = res.data;
+  } catch {
+    showToast("Gagal memuat kategori", "error");
+  }
+};
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
   const token = localStorage.getItem("token");
   if (!token) { router.push("/login"); return; }
-  await fetchMenus();
+  await Promise.all([fetchMenus(), fetchCategories()]);
 });
 </script>
 
@@ -1018,5 +1165,55 @@ onMounted(async () => {
 }
 @media (max-width: 480px) {
   .mm-title { font-size: 20px; }
+}
+
+.mm-input-prefixed::-webkit-outer-spin-button,
+.mm-input-prefixed::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.mm-input-prefixed[type="number"] {
+  -moz-appearance: textfield; /* Firefox */
+}
+
+.mm-cat-row { display: flex; gap: 8px; align-items: stretch; }
+.mm-cat-row .mm-input { flex: 1; }
+.mm-btn-cat-add {
+  width: 38px; height: 38px; flex-shrink: 0;
+  background: rgba(232,82,26,0.12); border: 0.5px solid rgba(232,82,26,0.3);
+  border-radius: 9px; color: #E8521A; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .12s;
+}
+.mm-btn-cat-add:hover { background: rgba(232,82,26,0.22); }
+
+.mm-group-label--orphan {
+  color: #F87171 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.mm-orphan-icon { font-size: 13px; }
+
+/* Baris menu yang kategorinya sudah dihapus */
+.mm-row-orphan {
+  background: rgba(255,255,255,0.02);
+  opacity: 0.65;
+}
+.mm-row-orphan .mm-thumb {
+  filter: grayscale(1);
+}
+.mm-card.mm-row-orphan,
+.mm-card-out.mm-row-orphan {
+  background: rgba(255,255,255,0.015);
+  filter: grayscale(0.6);
+}
+
+/* Ikon warning bulat merah + segitiga seru */
+.mm-warning-badge {
+  color: #F87171;
+  font-size: 13px;
+  margin-left: 6px;
+  vertical-align: middle;
 }
 </style>

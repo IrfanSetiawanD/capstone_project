@@ -226,12 +226,13 @@ const isCartOpen = ref(false)
 
 const selectedCategory = ref("all")
 
-const categories = [
-  { label: "Semua",            value: "all"     },
-  { label: "Main Menu",        value: "Makanan" },
-  { label: "Dimsum & Cemilan", value: "Snacks"  },
-  { label: "Minuman",          value: "Minuman" },
-]
+const categories = computed(() => {
+  const uniqueCats = [...new Set(menus.value.map(m => m.category_name).filter(Boolean))];
+  return [
+    { label: "Semua", value: "all" },
+    ...uniqueCats.map(name => ({ label: name, value: name })),
+  ];
+});
 
 const { isStoreOpen, closedMessage, fetchSettings } = useStoreSettings()
 onMounted(() => {
@@ -257,9 +258,13 @@ const fetchMenus = async () => {
 }
 
 const filteredMenus = computed(() => {
+  // Menu tanpa kategori (category_name null) selalu disembunyikan dari customer
+  const validMenus = menus.value.filter(m => m.category_name)
+
   const list = selectedCategory.value === "all"
-    ? menus.value
-    : menus.value.filter(m => m.category_name === selectedCategory.value)
+    ? validMenus
+    : validMenus.filter(m => m.category_name === selectedCategory.value)
+
   return [...list].sort((a, b) => b.is_available - a.is_available)
 })
 
@@ -294,8 +299,6 @@ const selectCategoryWithScroll = (val) => {
   selectCategory(val)
   scrollTabIntoView(val)
 }
-
-onMounted(fetchMenus)
 </script>
 
 <style scoped>
