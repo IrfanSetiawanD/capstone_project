@@ -46,7 +46,7 @@
         </span>
         <span class="summary-item">
           <span class="summary-dot dot-pending"></span>
-          {{ filteredOrders.filter(o => o.payment_status !== 'paid').length }} belum lunas
+          {{ filteredOrders.filter(o => o.payment_status !== 'paid' && o.payment_status !== 'void').length }} belum lunas
         </span>
         <span class="summary-item">
           <span class="summary-dot dot-paid"></span>
@@ -87,37 +87,44 @@
               <td class="td-center">
                 <span
                   class="status-pill"
-                  :class="order.status === 'completed' ? 'pill-green' : 'pill-amber'"
+                  :class="order.status === 'completed' ? 'pill-green' : (order.status === 'cancelled' ? 'pill-red' : 'pill-amber')"
                 >
-                  {{ order.status === 'completed' ? 'Selesai' : 'Proses' }}
+                  {{ order.status === 'completed' ? 'Selesai' : (order.status === 'cancelled' ? 'Dibatalkan' : 'Proses') }}
                 </span>
               </td>
 
               <td class="td-center">
                 <span
                   class="status-pill"
-                  :class="order.payment_status === 'paid' ? 'pill-green' : 'pill-yellow'"
+                  :class="order.payment_status === 'paid' ? 'pill-green' : (order.payment_status === 'void' ? 'pill-gray' : 'pill-yellow')"
                 >
-                  {{ order.payment_status === 'paid' ? 'Lunas' : 'Pending' }}
+                  {{ order.payment_status === 'paid' ? 'Lunas' : (order.payment_status === 'void' ? 'Batal' : 'Pending') }}
                 </span>
               </td>
 
               <td class="td-method">
-                <span class="method-icon">{{ order.payment_method === 'qris_manual' ? '📱' : '💵' }}</span>
-                {{ order.payment_method === 'qris_manual' ? 'QRIS' : (order.payment_method || 'Cash') }}
+                <span class="method-icon">{{ order.payment_method === 'qris_manual' ? '📱' : (order.payment_method === 'mixed' ? '🔀' : '💵') }}</span>
+                {{ order.payment_method === 'qris_manual' ? 'QRIS' : (order.payment_method === 'mixed' ? 'Split' : (order.payment_method || 'Cash')) }}
               </td>
 
               <td class="td-center td-time">{{ formatTime(order.created_at) }}</td>
 
-              <td class="td-center" @click.stop>
+              <td class="td-center td-actions" @click.stop>
                 <button
-                  v-if="order.payment_status !== 'paid'"
+                  v-if="order.payment_status !== 'paid' && order.status !== 'cancelled'"
                   class="lunasi-btn"
                   @click="openPayModal(order)"
                 >
                   Lunasi
                 </button>
-                <span v-else class="td-dash">✓</span>
+                <span v-else-if="order.status !== 'cancelled'" class="td-dash">✓</span>
+                <button
+                  v-if="order.status !== 'completed' && order.status !== 'cancelled'"
+                  class="batalkan-btn"
+                  @click="openCancelModal(order)"
+                >
+                  Batalkan
+                </button>
               </td>
             </tr>
 
@@ -163,6 +170,15 @@
             <div class="meta-row"><span>Pelanggan</span><span class="meta-val">{{ selectedOrder?.customer_name || selectedOrder?.customer_phone || 'Guest' }}</span></div>
           </div>
 
+          <!-- Info pembatalan, cuma muncul kalau order berstatus cancelled -->
+          <div v-if="selectedOrder?.status === 'cancelled'" class="cancel-info-box">
+            <p class="cancel-info-title">⚠ Order Dibatalkan</p>
+            <div class="meta-row"><span>Alasan</span><span class="meta-val">{{ selectedOrder?.cancel_reason_display || '—' }}</span></div>
+            <div v-if="selectedOrder?.cancel_note" class="meta-row"><span>Catatan</span><span class="meta-val">{{ selectedOrder?.cancel_note }}</span></div>
+            <div class="meta-row"><span>Oleh</span><span class="meta-val">{{ selectedOrder?.cancelled_by || '—' }}</span></div>
+            <div class="meta-row"><span>Waktu</span><span class="meta-val">{{ formatFullDateTime(selectedOrder?.cancelled_at) }}</span></div>
+          </div>
+
           <div class="receipt-divider">· · · · · · · · · · · · · · · · · · · ·</div>
 
           <div class="receipt-items">
@@ -181,8 +197,8 @@
 
           <div class="receipt-totals">
             <div class="total-row"><span>Subtotal</span><span>{{ formatPrice(computedSubtotal) }}</span></div>
-            <div v-if="parseFloat(selectedOrder?.discount_amount) > 0" class="total-row total-discount">
-              <span>Diskon Member</span><span>-{{ formatPrice(selectedOrder?.discount_amount) }}</span>
+            <div v-if="parseFloat(selectedOrder?.promo_discount_amount) > 0" class="total-row total-discount">
+              <span>Diskon Promo</span><span>-{{ formatPrice(selectedOrder?.promo_discount_amount) }}</span>
             </div>
             <div class="total-row total-final">
               <span>Total</span><span>{{ formatPrice(selectedOrder?.total_price) }}</span>
@@ -196,12 +212,18 @@
           </div>
 
           <div class="receipt-info-card">
-            <div class="info-row"><span>Metode</span><span class="info-val">{{ order?.payment_method === 'qris_manual' ? 'QRIS' : (selectedOrder?.payment_method || 'Cash') }}</span></div>
+            <div class="info-row"><span>Metode</span><span class="info-val">{{ selectedOrder?.payment_method === 'qris_manual' ? 'QRIS' : (selectedOrder?.payment_method === 'mixed' ? 'Split Bayar' : (selectedOrder?.payment_method || 'Cash')) }}</span></div>
+            <template v-if="selectedOrder?.payment_method === 'mixed' && selectedOrder?.payments?.length">
+              <div v-for="p in selectedOrder.payments" :key="p.id" class="info-row" style="padding-left:0.75rem;">
+                <span>— {{ p.method_display }}</span>
+                <span class="info-val">{{ formatPrice(p.amount) }}</span>
+              </div>
+            </template>
             <div class="info-row"><span>Kasir</span><span class="info-val">{{ selectedOrder?.kasir_name || kasirName }}</span></div>
             <div class="info-row">
               <span>Status</span>
-              <span :class="selectedOrder?.payment_status === 'paid' ? 'info-paid' : 'info-pending'">
-                {{ selectedOrder?.payment_status === 'paid' ? 'LUNAS' : 'PENDING' }}
+              <span :class="selectedOrder?.payment_status === 'paid' ? 'info-paid' : (selectedOrder?.payment_status === 'void' ? 'info-void' : 'info-pending')">
+                {{ selectedOrder?.payment_status === 'paid' ? 'LUNAS' : (selectedOrder?.payment_status === 'void' ? 'BATAL' : 'PENDING') }}
               </span>
             </div>
           </div>
@@ -213,12 +235,29 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
             {{ isCapturing ? 'Memproses...' : 'Kirim via WA' }}
           </button>
+          <button class="btn-print" @click="printReceipt(80)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
+            Cetak
+          </button>
           <button class="btn-close-modal" @click="isModalOpen = false">Tutup</button>
+        </div>
+        <div class="print-size-row">
+          <span class="print-size-label">Ukuran kertas:</span>
+          <button
+            class="print-size-btn"
+            :class="{ active: printPaperWidth === 58 }"
+            @click="printReceipt(58)"
+          >58mm</button>
+          <button
+            class="print-size-btn"
+            :class="{ active: printPaperWidth === 80 }"
+            @click="printReceipt(80)"
+          >80mm</button>
         </div>
       </div>
     </div>
 
-    <!-- ── STRUK TERSEMBUNYI (untuk screenshot) ────────────────────── -->
+    <!-- ── STRUK TERSEMBUNYI (untuk screenshot / WA) ────────────────── -->
     <div
       ref="receiptRef"
       style="
@@ -251,7 +290,7 @@
       <div style="color:#3f3f46; margin-bottom:12px;">----------------------------------------</div>
       <div style="font-size:11px; margin-bottom:12px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Subtotal</span><span>{{ formatPrice(computedSubtotal) }}</span></div>
-        <div v-if="parseFloat(selectedOrder?.discount_amount) > 0" style="display:flex; justify-content:space-between; color:#f87171; margin-bottom:4px;"><span>Diskon Member</span><span>-{{ formatPrice(selectedOrder?.discount_amount) }}</span></div>
+        <div v-if="parseFloat(selectedOrder?.promo_discount_amount) > 0" style="display:flex; justify-content:space-between; color:#f87171; margin-bottom:4px;"><span>Diskon Promo</span><span>-{{ formatPrice(selectedOrder?.promo_discount_amount) }}</span></div>
         <div style="color:#3f3f46; margin:6px 0;">----------------------------------------</div>
         <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:900; color:#ffffff; margin-bottom:6px;"><span>TOTAL AKHIR</span><span style="color:#ef4444;">{{ formatPrice(selectedOrder?.total_price) }}</span></div>
         <div v-if="parseFloat(selectedOrder?.amount_paid) > 0" style="display:flex; justify-content:space-between; margin-bottom:2px; color:#a1a1aa;"><span>Bayar</span><span style="color:#ffffff; font-weight:600;">{{ formatPrice(selectedOrder.amount_paid) }}</span></div>
@@ -261,9 +300,48 @@
       <div style="background-color:#1a1a1a; padding:12px; border-radius:12px; border:1px solid #2a2a2a; font-size:10px; line-height:2; margin-bottom:12px;">
         <div>• Metode Bayar : <span style="color:#ffffff; font-weight:700; text-transform:uppercase;">{{ selectedOrder?.payment_method || 'Cash' }}</span></div>
         <div>• Kasir : <span style="color:#ffffff; font-weight:700;">{{ selectedOrder?.kasir_name || kasirName }}</span></div>
-        <div>• Status : <span :style="selectedOrder?.payment_status === 'paid' ? 'color:#34d399; font-weight:700;' : 'color:#fbbf24; font-weight:700;'">{{ (selectedOrder?.payment_status || 'PENDING').toUpperCase() }}</span></div>
+        <div>• Status : <span :style="selectedOrder?.payment_status === 'paid' ? 'color:#34d399; font-weight:700;' : (selectedOrder?.payment_status === 'void' ? 'color:#a1a1aa; font-weight:700;' : 'color:#fbbf24; font-weight:700;')">{{ selectedOrder?.payment_status === 'paid' ? 'LUNAS' : (selectedOrder?.payment_status === 'void' ? 'BATAL' : 'PENDING') }}</span></div>
       </div>
       <div style="text-align:center; font-size:10px; color:#a1a1aa; padding-top:4px; font-weight:700;">Terima kasih sudah makan di Masashimura! 🙏</div>
+    </div>
+
+    <!-- ── STRUK PRINT (thermal 58mm/80mm) — hanya tampil saat print ── -->
+    <div ref="printRef" class="print-receipt" :style="{ width: printPaperWidth + 'mm' }">
+      <div class="pr-center">
+        <div class="pr-brand">MASASHIMURA</div>
+        <div class="pr-addr">Jl. Pintu air no 48 Depan Pengadilan Bekasi, Bekasi, Jawa Barat</div>
+      </div>
+      <div class="pr-divider pr-divider-strong"></div>
+      <div class="pr-row"><span>No. Nota</span><span>{{ selectedOrder?.order_number }}</span></div>
+      <div class="pr-row"><span>Kasir</span><span>{{ selectedOrder?.kasir_name || kasirName }}</span></div>
+      <div class="pr-row"><span>Waktu</span><span>{{ formatFullDateTime(selectedOrder?.created_at) }}</span></div>
+      <div class="pr-row"><span>Pelanggan</span><span>{{ selectedOrder?.customer_name || selectedOrder?.customer_phone || 'Guest' }}</span></div>
+      <div class="pr-divider"></div>
+      <div class="pr-heading">Detail Pesanan</div>
+      <div v-for="(item, idx) in selectedOrder?.items" :key="'pr'+idx" class="pr-item">
+        <div class="pr-item-row">
+          <span>{{ item.quantity }}x {{ item.menu_name }}</span>
+          <span>{{ formatPrice(item.price * item.quantity) }}</span>
+        </div>
+        <div v-if="item.notes" class="pr-note">"{{ item.notes }}"</div>
+      </div>
+      <div class="pr-divider"></div>
+      <div class="pr-row"><span>Subtotal</span><span>{{ formatPrice(computedSubtotal) }}</span></div>
+      <div v-if="parseFloat(selectedOrder?.promo_discount_amount) > 0" class="pr-row">
+        <span>Diskon Promo</span><span>-{{ formatPrice(selectedOrder?.promo_discount_amount) }}</span>
+      </div>
+      <div class="pr-row pr-total"><span>TOTAL</span><span>{{ formatPrice(selectedOrder?.total_price) }}</span></div>
+      <div v-if="parseFloat(selectedOrder?.amount_paid) > 0" class="pr-row pr-sub">
+        <span>Bayar</span><span>{{ formatPrice(selectedOrder?.amount_paid) }}</span>
+      </div>
+      <div v-if="parseFloat(selectedOrder?.change_amount) > 0" class="pr-row pr-sub">
+        <span>Kembalian</span><span>{{ formatPrice(selectedOrder?.change_amount) }}</span>
+      </div>
+      <div class="pr-divider pr-divider-strong"></div>
+      <div class="pr-row"><span>Metode</span><span class="pr-upper">{{ selectedOrder?.payment_method === 'qris_manual' ? 'QRIS' : (selectedOrder?.payment_method === 'mixed' ? 'Split Bayar' : (selectedOrder?.payment_method || 'Cash')) }}</span></div>
+      <div class="pr-row"><span>Status</span><span class="pr-upper">{{ selectedOrder?.payment_status === 'paid' ? 'LUNAS' : (selectedOrder?.payment_status === 'void' ? 'BATAL' : 'PENDING') }}</span></div>
+      <div class="pr-divider pr-divider-strong"></div>
+      <div class="pr-footer">Terima kasih sudah makan di Masashimura!</div>
     </div>
 
     <!-- ── MODAL LUNASI ────────────────────────────────────────────── -->
@@ -292,60 +370,126 @@
             <span class="pay-total-val">{{ formatPrice(selectedPayOrder.total_price) }}</span>
           </div>
 
-          <!-- Method selector -->
+          <!-- Split bayar: banyak baris pembayaran -->
           <div class="pay-section">
-            <p class="pay-section-label">Metode Pembayaran</p>
-            <div class="pay-method-grid">
-              <button
-                @click="payMethod = 'cash'"
-                class="pay-method-btn"
-                :class="{ active: payMethod === 'cash' }"
-              >
-                <span class="method-btn-icon">💵</span>
-                Cash
-              </button>
-              <button
-                @click="payMethod = 'qris_manual'"
-                class="pay-method-btn"
-                :class="{ active: payMethod === 'qris_manual' }"
-              >
-                <span class="method-btn-icon">📱</span>
-                QRIS
-              </button>
+            <div class="pay-split-header">
+              <p class="pay-section-label" style="margin:0;">Pembayaran</p>
+              <button type="button" class="pay-add-row-btn" @click="addPayRow">+ Tambah Baris</button>
             </div>
+
+            <div v-for="(row, idx) in payRows" :key="idx" class="pay-split-row">
+              <div class="pay-method-grid pay-method-grid-compact">
+                <button
+                  type="button"
+                  @click="row.method = 'cash'"
+                  class="pay-method-btn pay-method-btn-sm"
+                  :class="{ active: row.method === 'cash' }"
+                >💵 Cash</button>
+                <button
+                  type="button"
+                  @click="row.method = 'qris_manual'"
+                  class="pay-method-btn pay-method-btn-sm"
+                  :class="{ active: row.method === 'qris_manual' }"
+                >📱 QRIS</button>
+              </div>
+              <input
+                v-model.number="row.amount"
+                type="number"
+                placeholder="0"
+                class="pay-amount-input pay-split-input"
+              />
+              <button
+                v-if="payRows.length > 1"
+                type="button"
+                class="pay-remove-row-btn"
+                @click="removePayRow(idx)"
+                aria-label="Hapus baris"
+              >✕</button>
+            </div>
+
+            <button type="button" class="pay-split-fill-btn" @click="fillRemainingToLastRow" v-if="paySplitRemaining !== 0">
+              Isi otomatis sisa {{ formatPrice(Math.abs(paySplitRemaining)) }} ke baris terakhir
+            </button>
           </div>
 
-          <!-- Cash amount -->
-          <div v-if="payMethod === 'cash'" class="pay-section">
-            <p class="pay-section-label">Uang Diterima</p>
-            <input
-              v-model.number="payAmountPaid"
-              type="number"
-              placeholder="0"
-              class="pay-amount-input"
-            />
-            <div
-              v-if="payAmountPaid > 0 && payAmountPaid >= parseFloat(selectedPayOrder.total_price)"
-              class="change-box change-ok"
-            >
-              <span>Kembalian</span>
-              <span>{{ formatPrice(payAmountPaid - parseFloat(selectedPayOrder.total_price)) }}</span>
-            </div>
-            <div
-              v-else-if="payAmountPaid > 0 && payAmountPaid < parseFloat(selectedPayOrder.total_price)"
-              class="change-box change-err"
-            >
-              <span>⚠ Kurang</span>
-              <span>{{ formatPrice(parseFloat(selectedPayOrder.total_price) - payAmountPaid) }}</span>
-            </div>
+          <!-- Ringkasan total vs tagihan -->
+          <div
+            class="change-box"
+            :class="paySplitRemaining > 0 ? 'change-err' : 'change-ok'"
+          >
+            <span>{{ paySplitRemaining > 0 ? 'Kurang' : (paySplitRemaining < 0 ? 'Kembalian' : 'Pas') }}</span>
+            <span>{{ formatPrice(Math.abs(paySplitRemaining)) }}</span>
           </div>
 
           <button
             @click="confirmPay"
-            :disabled="isPaying || (payMethod === 'cash' && payAmountPaid > 0 && payAmountPaid < parseFloat(selectedPayOrder.total_price))"
+            :disabled="isPaying || paySplitRemaining > 0 || payRows.some(r => !r.amount || r.amount <= 0)"
             class="pay-confirm-btn"
           >
             {{ isPaying ? 'Memproses...' : 'Konfirmasi Lunas' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MODAL BATALKAN ORDER ────────────────────────────────────── -->
+    <div v-if="isCancelModalOpen && selectedCancelOrder" class="modal-overlay" @click.self="isCancelModalOpen = false">
+      <div class="pay-modal-box">
+        <div class="modal-header">
+          <div>
+            <p class="modal-eyebrow">Batalkan Order</p>
+            <h2 class="modal-title">{{ selectedCancelOrder.order_number }}</h2>
+          </div>
+          <button class="modal-close" @click="isCancelModalOpen = false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div class="pay-body">
+          <div class="pay-customer">
+            <p class="pay-name">{{ selectedCancelOrder.customer_name || 'Walk In' }}</p>
+            <p class="pay-phone">{{ selectedCancelOrder.customer_phone || 'Tanpa nomor' }}</p>
+          </div>
+
+          <div class="pay-total-strip">
+            <span class="pay-total-label">Total Tagihan</span>
+            <span class="pay-total-val">{{ formatPrice(selectedCancelOrder.total_price) }}</span>
+          </div>
+
+          <!-- Alasan pembatalan (wajib) -->
+          <div class="pay-section">
+            <p class="pay-section-label">Alasan Pembatalan <span style="color:#dc2626;">*</span></p>
+            <div class="pay-method-grid" style="grid-template-columns: repeat(2, 1fr);">
+              <button
+                v-for="reason in cancelReasonOptions"
+                :key="reason.value"
+                @click="cancelReason = reason.value"
+                class="pay-method-btn"
+                :class="{ active: cancelReason === reason.value }"
+              >
+                {{ reason.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Catatan opsional -->
+          <div class="pay-section">
+            <p class="pay-section-label">Catatan Tambahan (opsional)</p>
+            <textarea
+              v-model="cancelNote"
+              rows="2"
+              placeholder="Cth: kelebihan input qty, salah pencet menu, dll."
+              class="pay-amount-input"
+              style="font-family: inherit; font-size: 0.85rem; resize: vertical;"
+            ></textarea>
+          </div>
+
+          <button
+            @click="confirmCancel"
+            :disabled="isCancelling || !cancelReason"
+            class="pay-confirm-btn cancel-confirm-btn"
+          >
+            {{ isCancelling ? 'Memproses...' : 'Batalkan Order Ini' }}
           </button>
         </div>
       </div>
@@ -363,7 +507,6 @@ import html2canvas from 'html2canvas';
 
 const authStore = useAuthStore();
 const kasirName = computed(() => authStore.user?.name || authStore.user?.username || 'Staff');
-const payAmountPaid = ref(0);
 
 const currentDate   = ref(new Date());
 const orders        = ref([]);
@@ -372,12 +515,35 @@ const isModalOpen   = ref(false);
 const selectedOrder = ref(null);
 const isCapturing   = ref(false);
 const receiptRef    = ref(null);
+const printRef       = ref(null);
+const printPaperWidth = ref(80); // 58 atau 80 (mm)
 let pollingTimer    = null;
 
 const isPayModalOpen   = ref(false);
 const selectedPayOrder = ref(null);
-const payMethod        = ref("cash");
 const isPaying         = ref(false);
+const payRows          = ref([{ method: "cash", amount: 0 }]);
+
+const paySplitTotalEntered = computed(() =>
+  payRows.value.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+);
+const paySplitRemaining = computed(() => {
+  if (!selectedPayOrder.value) return 0;
+  return parseFloat(selectedPayOrder.value.total_price) - paySplitTotalEntered.value;
+});
+
+const isCancelModalOpen   = ref(false);
+const selectedCancelOrder = ref(null);
+const cancelReason        = ref("");
+const cancelNote          = ref("");
+const isCancelling        = ref(false);
+
+const cancelReasonOptions = [
+  { value: "wrong_input",     label: "Salah Input" },
+  { value: "customer_cancel", label: "Pelanggan Batal" },
+  { value: "out_of_stock",    label: "Stok Habis" },
+  { value: "other",           label: "Lainnya" },
+];
 
 const formattedCurrentDate = computed(() =>
   currentDate.value.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
@@ -410,9 +576,24 @@ const filteredOrders = computed(() =>
 const openOrderModal = (order) => { selectedOrder.value = order; isModalOpen.value = true; };
 const openPayModal = (order) => {
   selectedPayOrder.value = order;
-  payMethod.value        = order.payment_method || "cash";
-  payAmountPaid.value    = 0;
+  payRows.value          = [{ method: "cash", amount: 0 }];
   isPayModalOpen.value   = true;
+};
+
+const addPayRow = () => {
+  payRows.value.push({ method: "cash", amount: 0 });
+};
+
+const removePayRow = (idx) => {
+  payRows.value.splice(idx, 1);
+};
+
+const fillRemainingToLastRow = () => {
+  if (!payRows.value.length) return;
+  const last = payRows.value[payRows.value.length - 1];
+  const currentOthers = paySplitTotalEntered.value - (Number(last.amount) || 0);
+  const target = parseFloat(selectedPayOrder.value.total_price) - currentOthers;
+  last.amount = Math.max(target, 0);
 };
 
 const confirmPay = async () => {
@@ -420,15 +601,48 @@ const confirmPay = async () => {
   isPaying.value = true;
   try {
     await apiClient.patch(`/orders/${selectedPayOrder.value.id}/pay/`, {
-      payment_method: payMethod.value,
-      amount_paid:    payMethod.value === 'cash' ? payAmountPaid.value : 0,
-      kasir_name:     kasirName.value,
+      payments: payRows.value.map(r => ({ method: r.method, amount: Number(r.amount) || 0 })),
+      kasir_name: kasirName.value,
     });
     toast.success(`Order ${selectedPayOrder.value.order_number} berhasil dilunasi`);
-    isPayModalOpen.value = false; selectedPayOrder.value = null; payAmountPaid.value = 0;
+    isPayModalOpen.value = false;
+    selectedPayOrder.value = null;
+    payRows.value = [{ method: "cash", amount: 0 }];
     fetchActiveOrders();
-  } catch { toast.error("Gagal melunasi pembayaran"); }
-  finally { isPaying.value = false; }
+  } catch (err) {
+    toast.error(err?.response?.data?.detail || "Gagal melunasi pembayaran");
+  } finally {
+    isPaying.value = false;
+  }
+};
+
+const openCancelModal = (order) => {
+  selectedCancelOrder.value = order;
+  cancelReason.value        = "";
+  cancelNote.value          = "";
+  isCancelModalOpen.value   = true;
+};
+
+const confirmCancel = async () => {
+  if (!selectedCancelOrder.value || !cancelReason.value) return;
+  isCancelling.value = true;
+  try {
+    await apiClient.patch(`/orders/${selectedCancelOrder.value.id}/cancel/`, {
+      cancel_reason: cancelReason.value,
+      cancel_note:   cancelNote.value,
+      kasir_name:    kasirName.value,
+    });
+    toast.success(`Order ${selectedCancelOrder.value.order_number} dibatalkan`);
+    isCancelModalOpen.value = false;
+    selectedCancelOrder.value = null;
+    cancelReason.value = "";
+    cancelNote.value = "";
+    fetchActiveOrders();
+  } catch (err) {
+    toast.error(err?.response?.data?.detail || "Gagal membatalkan order");
+  } finally {
+    isCancelling.value = false;
+  }
 };
 
 const shareReceiptAsImage = async () => {
@@ -455,6 +669,24 @@ const shareReceiptAsImage = async () => {
       isCapturing.value = false;
     }, 'image/png');
   } catch (err) { console.error(err); toast.error("Gagal screenshot struk"); isCapturing.value = false; }
+};
+
+// ── Cetak struk thermal (58mm / 80mm) ──────────────────────────────
+const printReceipt = (widthMm = 80) => {
+  if (!selectedOrder.value) return;
+  printPaperWidth.value = widthMm;
+
+  // Set ukuran halaman cetak secara dinamis (@page tidak bisa pakai CSS variable)
+  let pageStyleTag = document.getElementById('thermal-page-style');
+  if (!pageStyleTag) {
+    pageStyleTag = document.createElement('style');
+    pageStyleTag.id = 'thermal-page-style';
+    document.head.appendChild(pageStyleTag);
+  }
+  pageStyleTag.innerHTML = `@page { size: ${widthMm}mm auto; margin: 0; }`;
+
+  // Kasih jeda dikit biar width & isi struk sempat re-render sebelum dialog print muncul
+  setTimeout(() => window.print(), 80);
 };
 
 const computedSubtotal = computed(() => {
@@ -681,6 +913,8 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
 .pill-green  { background: rgba(34,197,94,0.1);  color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
 .pill-amber  { background: rgba(245,158,11,0.1); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
 .pill-yellow { background: rgba(234,179,8,0.08); color: #facc15; border: 1px solid rgba(234,179,8,0.18); }
+.pill-red    { background: rgba(220,38,38,0.1);  color: #f87171; border: 1px solid rgba(220,38,38,0.2); }
+.pill-gray   { background: rgba(255,255,255,0.05); color: #a1a1aa; border: 1px solid rgba(255,255,255,0.1); }
 
 .td-method { font-size: 0.8rem; color: rgba(255,255,255,0.55); text-transform: capitalize; }
 .method-icon { margin-right: 0.2rem; }
@@ -702,6 +936,26 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
   transition: background 0.15s;
 }
 .lunasi-btn:hover { background: #b91c1c; }
+
+.td-actions { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+
+.batalkan-btn {
+  padding: 0.4rem 0.85rem;
+  background: transparent;
+  border: 1px solid rgba(220,38,38,0.35);
+  border-radius: 8px;
+  color: #f87171;
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.batalkan-btn:hover { background: rgba(220,38,38,0.1); border-color: rgba(220,38,38,0.6); }
+
+.cancel-confirm-btn { background: #dc2626; }
+.cancel-confirm-btn:hover:not(:disabled) { background: #b91c1c; }
 
 /* Empty state */
 .ao-empty {
@@ -765,6 +1019,17 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
 
 .receipt-meta { display: flex; flex-direction: column; gap: 0.25rem; }
 .meta-row { display: flex; justify-content: space-between; font-size: 0.72rem; }
+.cancel-info-box {
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  background: rgba(220,38,38,0.08);
+  border: 1px solid rgba(220,38,38,0.2);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.cancel-info-title { margin: 0 0 0.25rem; font-size: 0.72rem; font-weight: 700; color: #f87171; }
 .meta-val { color: #fff; font-weight: 600; }
 
 .receipt-items { margin-bottom: 0.5rem; }
@@ -796,11 +1061,12 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
 .info-val { color: #fff; font-weight: 700; text-transform: uppercase; }
 .info-paid   { color: #34d399; font-weight: 700; }
 .info-pending{ color: #fbbf24; font-weight: 700; }
+.info-void   { color: #a1a1aa; font-weight: 700; }
 
 .modal-footer {
   padding: 1rem 1.25rem;
   border-top: 1px solid rgba(255,255,255,0.06);
-  display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem;
 }
 .btn-share {
   display: flex; align-items: center; justify-content: center; gap: 0.4rem;
@@ -812,6 +1078,15 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
 }
 .btn-share:hover:not(:disabled) { background: #15803d; }
 .btn-share:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-print {
+  display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+  padding: 0.7rem; background: #2563eb; border: none;
+  border-radius: 10px; color: #fff;
+  font-family: 'Oswald', sans-serif; font-size: 0.7rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; transition: background 0.15s;
+}
+.btn-print:hover { background: #1d4ed8; }
 .btn-close-modal {
   padding: 0.7rem; background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
@@ -821,6 +1096,23 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
   cursor: pointer; transition: all 0.15s;
 }
 .btn-close-modal:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+.print-size-row {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  padding: 0 1.25rem 1rem;
+}
+.print-size-label {
+  font-size: 0.62rem; color: rgba(255,255,255,0.3);
+  font-family: 'Oswald', sans-serif; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.print-size-btn {
+  padding: 0.3rem 0.7rem; border-radius: 100px;
+  border: 1px solid rgba(255,255,255,0.1); background: transparent;
+  color: rgba(255,255,255,0.4); font-family: monospace; font-size: 0.68rem;
+  cursor: pointer; transition: all 0.15s;
+}
+.print-size-btn:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
+.print-size-btn.active { background: rgba(37,99,235,0.15); border-color: #2563eb; color: #93c5fd; }
 
 /* ── Pay Modal ───────────────────────────────────────────────────── */
 .pay-modal-box {
@@ -882,6 +1174,33 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
 .pay-amount-input::placeholder { color: rgba(255,255,255,0.15); }
 .pay-amount-input:focus { border-color: rgba(220,38,38,0.4); }
 
+.pay-split-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem; }
+.pay-add-row-btn {
+  background: transparent; border: 1px dashed rgba(255,255,255,0.2); border-radius: 8px;
+  color: rgba(255,255,255,0.5); font-family: 'Oswald', sans-serif; font-size: 0.62rem;
+  letter-spacing: 0.08em; text-transform: uppercase; padding: 0.3rem 0.6rem; cursor: pointer;
+  transition: all 0.15s;
+}
+.pay-add-row-btn:hover { border-color: rgba(220,38,38,0.5); color: #fff; }
+
+.pay-split-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.pay-method-grid-compact { grid-template-columns: 1fr 1fr; flex-shrink: 0; width: 140px; }
+.pay-method-btn-sm { padding: 0.55rem 0.4rem; font-size: 0.62rem; }
+.pay-split-input { flex: 1; padding: 0.55rem 0.75rem; font-size: 0.85rem; }
+.pay-remove-row-btn {
+  background: transparent; border: none; color: rgba(255,255,255,0.3);
+  cursor: pointer; font-size: 0.9rem; flex-shrink: 0; padding: 0.2rem 0.4rem;
+  transition: color 0.15s;
+}
+.pay-remove-row-btn:hover { color: #f87171; }
+
+.pay-split-fill-btn {
+  background: transparent; border: none; color: rgba(220,38,38,0.7);
+  font-family: 'Oswald', sans-serif; font-size: 0.62rem; letter-spacing: 0.06em;
+  text-decoration: underline; cursor: pointer; padding: 0.2rem 0; text-align: left;
+}
+.pay-split-fill-btn:hover { color: #dc2626; }
+
 .change-box {
   display: flex; justify-content: space-between;
   padding: 0.6rem 0.85rem;
@@ -900,6 +1219,9 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
 .pay-confirm-btn:hover:not(:disabled) { background: #b91c1c; }
 .pay-confirm-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
+/* ── Struk print (thermal) — disembunyikan di layar biasa ─────────── */
+.print-receipt { display: none; }
+
 /* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .ao-root { padding: 1.25rem 1rem; }
@@ -915,4 +1237,66 @@ onUnmounted(() => { if (pollingTimer) clearInterval(pollingTimer); });
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; }
+</style>
+
+<!-- ── STYLE PRINT (global, tidak di-scope) ─────────────────────────
+     Harus di luar <style scoped> karena selector "body *" butuh akses
+     ke seluruh halaman, bukan cuma elemen di dalam komponen ini. -->
+<style>
+@media print {
+  body * { visibility: hidden; }
+  .print-receipt, .print-receipt * { visibility: visible; }
+  .print-receipt {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: #ffffff;
+    color: #000000;
+    padding: 4mm 4.5mm;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11.5px;
+    line-height: 1.55;
+  }
+}
+
+.pr-center { text-align: center; margin-bottom: 4px; }
+.pr-brand { font-size: 18px; font-weight: 900; letter-spacing: 0.08em; }
+.pr-addr { font-size: 9.5px; margin-top: 3px; line-height: 1.4; color: #333; }
+
+.pr-divider { border-top: 1px dashed #000; margin: 8px 0; height: 0; }
+.pr-divider-strong { border-top: 2px solid #000; margin: 8px 0; height: 0; }
+
+.pr-row { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 3px; font-size: 11.5px; }
+.pr-sub { color: #444; }
+.pr-upper { text-transform: uppercase; font-weight: 700; }
+
+.pr-total {
+  font-weight: 900;
+  font-size: 14px;
+  padding: 5px 0;
+  margin-top: 2px;
+  border-top: 1px dashed #000;
+  border-bottom: 1px dashed #000;
+}
+
+.pr-heading {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  color: #333;
+}
+.pr-item { margin-bottom: 5px; }
+.pr-item-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11.5px; }
+.pr-note { font-size: 9.5px; font-style: italic; padding-left: 12px; color: #444; margin-top: 1px; }
+
+.pr-footer {
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  margin-top: 4px;
+  letter-spacing: 0.02em;
+}
 </style>

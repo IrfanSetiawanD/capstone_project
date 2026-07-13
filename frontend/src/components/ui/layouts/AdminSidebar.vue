@@ -100,12 +100,18 @@
             <router-link
               v-if="link.roles.includes(userRole)"
               :to="link.to"
-              @click="emit('close')"
+              @click="handleNavClick(link.to)"
               class="group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200"
               :class="isActive(link.to) ? 'bg-white/[0.07] text-white' : 'text-white/35 hover:text-white/80 hover:bg-white/[0.04]'"
             >
               <component :is="link.icon" size="14" :class="isActive(link.to) ? 'text-white/70' : 'text-white/20 group-hover:text-white/50'" />
-              <span class="text-[13px] font-medium font-inter tracking-normal">{{ link.label }}</span>
+              <span class="text-[13px] font-medium font-inter tracking-normal flex-1">{{ link.label }}</span>
+              <span
+                v-if="link.to === '/admin/orders' && notifStore.unreadCount > 0"
+                class="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold font-mono"
+              >
+                {{ notifStore.unreadCount > 9 ? '9+' : notifStore.unreadCount }}
+              </span>
             </router-link>
           </template>
         </div>
@@ -283,21 +289,28 @@ import {
   LayoutDashboard, Users, Clock, Settings, LogOut,
   ShoppingCart, ChefHat, BarChart3, Wallet, UserPlus,
   UserCheck, Edit3, ChevronDown, Zap, FolderOpen, ShieldCheck,
-  CheckCircle2, XCircle, AlertTriangle, Info, X,
-  Crown, User, BriefcaseBusiness,
+  CheckCircle2, XCircle, AlertTriangle, Info, X, Tag,
+  Crown, User, BriefcaseBusiness, Gift,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useOrderNotificationsStore } from '@/stores/orderNotifications'
 import { useRoute } from 'vue-router'
 import { computed, reactive, ref, watch } from 'vue'
 
 const props = defineProps({ open: Boolean })
 const emit  = defineEmits(['close'])
 
-const auth     = useAuthStore()
-const route    = useRoute()
-const user     = computed(() => auth.user)
-const userRole = computed(() => auth.user?.role?.toLowerCase() || 'kasir')
-const isActive = (path) => route.path === path
+const auth      = useAuthStore()
+const notifStore = useOrderNotificationsStore()
+const route     = useRoute()
+const user      = computed(() => auth.user)
+const userRole  = computed(() => auth.user?.role?.toLowerCase() || 'kasir')
+const isActive  = (path) => route.path === path
+
+const handleNavClick = (path) => {
+  if (path === '/admin/orders') notifStore.clearUnread()
+  emit('close')
+}
 
 const operationalLinks = [
   { to: '/admin/pos',    icon: ShoppingCart, label: 'New Order (POS)', roles: ['owner', 'admin', 'kasir'] },
@@ -305,6 +318,8 @@ const operationalLinks = [
 ]
 const dataManagementLinks = [
   { to: '/admin/menus',         icon: ChefHat,   label: 'Manage Menus' },
+  { to: '/admin/promos',        icon: Tag,        label: 'Kelola Promo' },
+  { to: '/admin/point-rewards', icon: Gift,       label: 'Kelola Reward Poin' },
   { to: '/admin/reports',       icon: BarChart3,  label: 'Menu Reports' },
   { to: '/admin/edit-homepage', icon: Edit3,      label: 'Edit Homepage' },
   { to: '/admin/customers',     icon: Users,      label: 'Loyal Customers' },

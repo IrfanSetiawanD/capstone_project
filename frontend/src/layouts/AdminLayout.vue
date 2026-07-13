@@ -50,10 +50,31 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import AdminSidebar from '@/components/ui/layouts/AdminSidebar.vue'
+import { useOrderNotificationsStore } from '@/stores/orderNotifications'
+import { unlockNotificationAudio } from '@/utils/notificationSound'
 
 const sidebarOpen = ref(false)
+
+// ── Notifikasi order baru: polling + suara ────────────────────────────────
+// Sebelumnya store & util ini ada tapi ngga pernah dipanggil di manapun,
+// jadi polling ngga pernah jalan dan audio context ngga pernah ke-unlock.
+// Dipasang di sini (root layout admin) biar aktif begitu admin login,
+// di halaman manapun dia berada.
+const orderNotifications = useOrderNotificationsStore()
+
+onMounted(() => {
+  orderNotifications.startPolling()
+  // Browser nge-block AudioContext sebelum ada interaksi user pertama kali
+  // (klik/tap) di halaman — jadi listener ini cuma buat "buka kunci" audio,
+  // sekali kepakai langsung ke-remove sendiri.
+  window.addEventListener('click', unlockNotificationAudio, { once: true })
+})
+
+onUnmounted(() => {
+  orderNotifications.stopPolling()
+})
 </script>
 
 <style scoped>

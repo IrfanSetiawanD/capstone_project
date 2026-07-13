@@ -25,112 +25,89 @@
     <div class="space-y-6">
 
       <!-- 01. HERO SECTION -->
-<div class="bg-[#0F0F0F] border border-white/5 rounded-xl p-6 space-y-4">
-  <h2 class="font-sora text-sm font-bold uppercase tracking-wider text-[#DC2626] flex items-center gap-2">
-    <span>01.</span> Hero Section (100vh)
-  </h2>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-    <div class="space-y-1.5">
-      <label class="text-white/40 uppercase font-bold tracking-wider">Headline Utama</label>
-      <input v-model="form.hero_headline" type="text"
-        class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white font-sora font-bold" />
-    </div>
-    <div class="space-y-1.5">
-      <label class="text-white/40 uppercase font-bold tracking-wider">Sub-Headline Singkat</label>
-      <input v-model="form.hero_subheadline" type="text"
-        class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white" />
-    </div>
-
-    <!-- FOTO BACKGROUND PARALLAX (16:9) -->
-    <div class="space-y-1.5 md:col-span-2">
-      <label class="text-white/40 uppercase font-bold tracking-wider">
-        Foto Background Parallax Hero (16:9)
-      </label>
-      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
-        <!-- Klik foto = buka cropper langsung -->
-        <div
-          @click="triggerImageCrop(null, 'hero_bg')"
-          class="w-32 aspect-video bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
-          title="Klik untuk ganti foto"
-        >
-          <img v-if="form.hero_bg_image" :src="form.hero_bg_image"
-            class="w-full h-full object-cover group-hover:opacity-60 transition" />
-          <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
-          <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-            <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
+      <div class="bg-[#0F0F0F] border border-white/5 rounded-xl p-6 space-y-4">
+        <h2 class="font-sora text-sm font-bold uppercase tracking-wider text-[#DC2626] flex items-center gap-2">
+          <span>01.</span> Hero Section (100vh)
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="space-y-1.5">
+            <label class="text-white/40 uppercase font-bold tracking-wider">Headline Utama</label>
+            <input v-model="form.hero_headline" type="text"
+              class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white font-sora font-bold" />
           </div>
-        </div>
-        <div class="space-y-2 w-full">
-          <input type="text" :value="form.hero_bg_image" readonly
-            class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed"
-            placeholder="URL Cloudinary terisi otomatis..." />
-          <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
-            Pilih & Potong Foto Background (16:9)
-            <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'hero_bg')" />
-          </label>
+          <div class="space-y-1.5">
+            <label class="text-white/40 uppercase font-bold tracking-wider">Sub-Headline Singkat</label>
+            <input v-model="form.hero_subheadline" type="text"
+              class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white" />
+          </div>
+
+          <!-- FOTO BACKGROUND PARALLAX (16:9) -->
+          <div class="space-y-1.5 md:col-span-2">
+            <label class="text-white/40 uppercase font-bold tracking-wider">
+              Foto Background Parallax Hero (16:9)
+            </label>
+            <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
+              <div
+                @click="triggerImageCrop(null, 'hero_bg')"
+                class="w-32 aspect-video bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
+                title="Klik untuk ganti foto"
+              >
+                <img v-if="form.hero_bg_image" :src="form.hero_bg_image"
+                  class="w-full h-full object-cover group-hover:opacity-60 transition" />
+                <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                  <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
+                </div>
+              </div>
+              <div class="space-y-2 w-full">
+                <input type="text" :value="form.hero_bg_image" readonly
+                  class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed"
+                  placeholder="URL Cloudinary terisi otomatis..." />
+                <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
+                  Pilih & Potong Foto Background (16:9)
+                  <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'hero_bg')" />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- FOTO MAKANAN KOTAK KANAN (1:1) -->
+          <div class="space-y-1.5 md:col-span-2">
+            <label class="text-white/40 uppercase font-bold tracking-wider">
+              Foto Makanan Kotak Kanan Hero (1:1)
+            </label>
+            <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
+              <div
+                @click="triggerImageCrop(null, 'hero_food')"
+                class="w-32 aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
+                title="Klik untuk ganti foto"
+              >
+                <img v-if="form.hero_food_image" :src="form.hero_food_image"
+                  class="w-full h-full object-cover group-hover:opacity-60 transition" />
+                <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                  <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
+                </div>
+              </div>
+              <div class="space-y-2 w-full">
+                <input type="text" :value="form.hero_food_image" readonly
+                  class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed"
+                  placeholder="URL Cloudinary terisi otomatis..." />
+                <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
+                  Pilih & Potong Foto Makanan (1:1)
+                  <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'hero_food')" />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!--
+            NB: Form foto "Outlet Suasana Kedai (1:1)" yang tadinya ada di sini
+            SUDAH DIHAPUS karena duplikat 100% dengan form foto about di Section 03
+            (sama-sama bind ke form.about_image). Cukup satu saja di Section 03.
+          -->
         </div>
       </div>
-    </div>
-
-    <!-- FOTO MAKANAN KOTAK KANAN (1:1) -->
-    <div class="space-y-1.5 md:col-span-2">
-      <label class="text-white/40 uppercase font-bold tracking-wider">
-        Foto Makanan Kotak Kanan Hero (1:1)
-      </label>
-      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
-        <!-- Klik foto = buka cropper langsung -->
-        <div
-          @click="triggerImageCrop(null, 'hero_food')"
-          class="w-32 aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
-          title="Klik untuk ganti foto"
-        >
-          <img v-if="form.hero_food_image" :src="form.hero_food_image"
-            class="w-full h-full object-cover group-hover:opacity-60 transition" />
-          <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
-          <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-            <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
-          </div>
-        </div>
-        <div class="space-y-2 w-full">
-          <input type="text" :value="form.hero_food_image" readonly
-            class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed"
-            placeholder="URL Cloudinary terisi otomatis..." />
-          <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
-            Pilih & Potong Foto Makanan (1:1)
-            <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'hero_food')" />
-          </label>
-        </div>
-      </div>
-    </div>
-
-    <!-- FOTO ABOUT (1:1) — sama, tambah klik foto -->
-    <div class="space-y-1.5 md:col-span-2">
-      <label class="text-white/40 uppercase font-bold tracking-wider">Foto Outlet Suasana Kedai (1:1)</label>
-      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
-        <div
-          @click="triggerImageCrop(null, 'about')"
-          class="w-24 aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
-        >
-          <img v-if="form.about_image" :src="form.about_image"
-            class="w-full h-full object-cover group-hover:opacity-60 transition" />
-          <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
-          <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-            <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
-          </div>
-        </div>
-        <div class="space-y-2 w-full">
-          <input type="text" :value="form.about_image" readonly
-            class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed"
-            placeholder="URL Cloudinary terisi otomatis..." />
-          <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
-            Pilih & Potong Foto (1:1)
-            <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'about')" />
-          </label>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
       <!-- 02. AKSEN TEKS BERJALAN -->
       <div class="bg-[#0F0F0F] border border-white/5 rounded-xl p-6 space-y-4">
@@ -155,15 +132,23 @@
             <textarea v-model="form.about_text" rows="3" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-red-600 outline-none text-white resize-none"></textarea>
           </div>
 
+          <!-- SATU-SATUNYA FORM FOTO ABOUT (dulu duplikat, sekarang cuma di sini) -->
           <div class="sm:col-span-3 space-y-1.5">
             <label class="text-white/40 uppercase font-bold tracking-wider">Foto Outlet Suasana Kedai (Kiri 50%)</label>
             <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
-              <div class="w-24 aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
-                <img v-if="form.about_image" :src="form.about_image" class="w-full h-full object-cover" alt="Preview About" />
+              <div
+                @click="triggerImageCrop(null, 'about')"
+                class="w-24 aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 cursor-pointer group relative"
+                title="Klik untuk ganti foto"
+              >
+                <img v-if="form.about_image" :src="form.about_image" class="w-full h-full object-cover group-hover:opacity-60 transition" alt="Preview About" />
                 <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-white/20">No Image</div>
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                  <span class="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
+                </div>
               </div>
               <div class="space-y-2 w-full">
-                <input type="text" v-model="form.about_image" readonly class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed" placeholder="URL Cloudinary terisi otomatis..." />
+                <input type="text" :value="form.about_image" readonly class="w-full bg-black/40 border border-white/5 rounded-lg p-2.5 text-xs font-mono text-zinc-400 outline-none cursor-not-allowed" placeholder="URL Cloudinary terisi otomatis..." />
                 <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
                   Pilih & Potong Foto (1:1)
                   <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'about')" />
@@ -237,13 +222,13 @@
         </div>
       </div>
 
-      <!-- 🔥 06. NEW GALLERY & EVENT MANAGEMENT MODULAR (Dinamis CRUD) -->
+      <!-- 🔥 06. NEW GALLERY & EVENT MANAGEMENT MODULAR (Dinamis CRUD, kini bisa full-edit) -->
       <div class="bg-[#0F0F0F] border border-white/5 rounded-xl p-6 space-y-4">
         <div class="flex items-center justify-between">
           <h2 class="font-sora text-sm font-bold uppercase tracking-wider text-[#DC2626] flex items-center gap-2">
             <span>06.</span> Gallery & Dokumentasi Event (Dinamis)
           </h2>
-          <button @click="openGalleryModal" class="bg-[#DC2626]/10 border border-[#DC2626]/20 text-[#DC2626] hover:bg-[#DC2626]/20 text-[10px] font-sora font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-all flex items-center gap-1 cursor-pointer">
+          <button @click="openGalleryModal()" class="bg-[#DC2626]/10 border border-[#DC2626]/20 text-[#DC2626] hover:bg-[#DC2626]/20 text-[10px] font-sora font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-all flex items-center gap-1 cursor-pointer">
             + Upload Foto Event
           </button>
         </div>
@@ -252,7 +237,8 @@
           <div v-for="img in galleryData" :key="img.id" class="group relative aspect-square rounded-xl overflow-hidden border border-white/5 bg-zinc-900 shadow-md">
             <img :src="img.image_url" class="w-full h-full object-cover" />
             <div class="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-3">
-              <div class="flex justify-end">
+              <div class="flex justify-end gap-2">
+                <button @click="openGalleryModal(img)" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[10px] font-bold px-2 py-1 rounded transition-all cursor-pointer">Edit</button>
                 <button @click="deleteGalleryItem(img.id)" class="bg-red-600/20 hover:bg-red-600 border border-red-500/30 text-white text-[10px] font-bold px-2 py-1 rounded transition-all cursor-pointer">Hapus</button>
               </div>
               <p class="text-[9px] font-sora font-bold uppercase tracking-wider text-white line-clamp-2">{{ img.title || 'Tanpa Judul' }}</p>
@@ -281,59 +267,78 @@
     <!-- 🔥 MODAL POPUP FORM CRUD UNTUK SUB-MODUL BENTO & GALLERY -->
     <div v-if="showModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 max-w-sm w-full space-y-5 shadow-2xl">
-        
+
         <h3 class="font-sora text-xs font-bold uppercase tracking-wider text-white border-b border-white/5 pb-2">
           <span v-if="modalType === 'bento'">{{ editingBentoId ? '✏️ Edit Fasilitas Bento' : '➕ Tambah Fasilitas Bento' }}</span>
-          <span v-else>📸 Upload Foto Event Baru</span>
+          <span v-else>{{ editingGalleryId ? '✏️ Edit Dokumentasi Foto' : '📸 Upload Foto Event Baru' }}</span>
         </h3>
-        
+
         <!-- FORM BENTO -->
         <div v-if="modalType === 'bento'" class="space-y-4 text-xs font-sora">
-  <div>
-    <label class="block uppercase text-zinc-500 mb-2 tracking-wide font-bold">Nama Fasilitas</label>
-    <input v-model="bentoForm.title" type="text" placeholder="Contoh: WiFi 150Mbps" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-red-600 outline-none text-white font-bold" />
-  </div>
+          <div>
+            <label class="block uppercase text-zinc-500 mb-2 tracking-wide font-bold">Nama Fasilitas</label>
+            <input v-model="bentoForm.title" type="text" placeholder="Contoh: WiFi 150Mbps" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-red-600 outline-none text-white font-bold" />
+          </div>
 
-  <!-- DROPDOWN ICON DINAMIS DENGAN PREVIEW -->
-  <div>
-    <label class="block uppercase text-zinc-500 mb-2 tracking-wide font-bold">Pilih Icon</label>
-    <div class="grid grid-cols-6 gap-2 bg-white/5 p-2 rounded-xl border border-white/10">
-      <button 
-        v-for="(comp, name) in iconMap" 
-        :key="name"
-        @click="bentoForm.icon_name = name"
-        :class="[
-          bentoForm.icon_name === name ? 'bg-red-600 text-white' : 'hover:bg-white/10 text-zinc-400',
-          'p-2 rounded-lg flex items-center justify-center transition-all'
-        ]"
-        type="button"
-      >
-        <component :is="comp" :size="16" />
-      </button>
-    </div>
-    <p class="text-[9px] text-zinc-500 mt-1 uppercase font-bold tracking-wider">Terpilih: {{ bentoForm.icon_name }}</p>
-  </div>
+          <!-- DROPDOWN ICON DINAMIS DENGAN PREVIEW -->
+          <div>
+            <label class="block uppercase text-zinc-500 mb-2 tracking-wide font-bold">Pilih Icon</label>
+            <div class="grid grid-cols-6 gap-2 bg-white/5 p-2 rounded-xl border border-white/10">
+              <button
+                v-for="(comp, name) in iconMap"
+                :key="name"
+                @click="bentoForm.icon_name = name"
+                :class="[
+                  bentoForm.icon_name === name ? 'bg-red-600 text-white' : 'hover:bg-white/10 text-zinc-400',
+                  'p-2 rounded-lg flex items-center justify-center transition-all'
+                ]"
+                type="button"
+              >
+                <component :is="comp" :size="16" />
+              </button>
+            </div>
+            <p class="text-[9px] text-zinc-500 mt-1 uppercase font-bold tracking-wider">Terpilih: {{ bentoForm.icon_name }}</p>
+          </div>
 
-  <div>
-    <label class="block uppercase text-zinc-500 mb-2 tracking-wide font-bold">Ukuran Grid Layout</label>
-    <select v-model="bentoForm.size" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-red-600 outline-none text-white font-bold">
-      <option value="normal" class="bg-[#0A0A0A]">Standard Card (1x1)</option>
-      <option value="large" class="bg-[#0A0A0A]">Large Card (2x2)</option>
-    </select>
-  </div>
-</div>
+          <div>
+            <label class="block uppercase text-zinc-500 mb-2 tracking-wide font-bold">Ukuran Grid Layout</label>
+            <select v-model="bentoForm.size" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-red-600 outline-none text-white font-bold">
+              <option value="normal" class="bg-[#0A0A0A]">Standard Card (1x1)</option>
+              <option value="large" class="bg-[#0A0A0A]">Large Card (2x2)</option>
+            </select>
+          </div>
+        </div>
 
-        <!-- FORM GALLERY EVENT (DENGAN JUDUL FOTO) -->
+        <!-- FORM GALLERY EVENT (FULL EDIT: JUDUL, KATEGORI, FOTO DENGAN CROP) -->
         <div v-if="modalType === 'gallery'" class="space-y-3 text-[11px] font-sora">
           <div class="space-y-1">
             <label class="block uppercase text-zinc-500 font-bold tracking-wide">Judul Event / Dokumentasi</label>
             <input v-model="galleryForm.title" type="text" placeholder="Contoh: Nobar Akbar Semifinal" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 focus:border-red-600 outline-none text-white font-bold" />
           </div>
+
           <div class="space-y-1">
-            <label class="block uppercase text-zinc-500 font-bold tracking-wide">Pilih Berkas File Gambar</label>
-            <div class="border border-dashed border-white/10 rounded-lg p-4 flex flex-col items-center justify-center bg-white/5 space-y-3">
-              <img v-if="galleryForm.image_url" :src="galleryForm.image_url" class="w-24 aspect-square object-cover rounded-lg border border-white/10" />
-              <input type="file" @change="uploadGalleryToCloudinary($event)" class="text-[10px] text-zinc-500 file:bg-zinc-800 file:text-white file:border-0 file:px-2 file:py-1 file:rounded cursor-pointer w-full" />
+            <label class="block uppercase text-zinc-500 font-bold tracking-wide">Kategori</label>
+            <input v-model="galleryForm.category" type="text" placeholder="Contoh: Suasana Kedai, Event, Best Seller" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 focus:border-red-600 outline-none text-white" />
+          </div>
+
+          <div class="space-y-1">
+            <label class="block uppercase text-zinc-500 font-bold tracking-wide">Foto Dokumentasi (1:1)</label>
+            <div class="flex flex-col items-center gap-3 bg-white/5 border border-dashed border-white/10 rounded-lg p-4">
+              <div
+                @click="triggerImageCrop(null, 'gallery')"
+                class="w-24 aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 cursor-pointer group relative flex-shrink-0"
+                title="Klik untuk pilih & potong foto"
+              >
+                <img v-if="galleryForm.image_url" :src="galleryForm.image_url" class="w-full h-full object-cover group-hover:opacity-60 transition" />
+                <div v-else class="w-full h-full flex items-center justify-center text-[9px] text-white/20">No Image</div>
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                  <span class="text-[9px] text-white font-bold bg-black/60 px-2 py-1 rounded">✏️ Ganti</span>
+                </div>
+              </div>
+              <label class="inline-block bg-white/5 border border-white/10 hover:bg-white/10 text-white font-sora text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md font-bold transition cursor-pointer">
+                Pilih & Potong Foto (1:1)
+                <input type="file" accept="image/*" class="hidden" @change="triggerImageCrop($event, 'gallery')" />
+              </label>
             </div>
           </div>
         </div>
@@ -349,7 +354,7 @@
       </div>
     </div>
 
-    <!-- COMPONENT CROPPER BAWAN LO -->
+    <!-- COMPONENT CROPPER BAWAAN LO -->
     <ImageCropper
       v-if="isCropping"
       :image="imageSrc"
@@ -366,15 +371,14 @@ import { ref, onMounted, onBeforeUnmount } from "vue";
 import { toast } from "vue-sonner";
 import axios from "axios";
 import ImageCropper from "@/components/ui/ImageCropper.vue";
-import { 
-  Coffee, Wifi, Zap, Utensils, DollarSign, Moon, Shield, Tv, 
-  Music, Gamepad2, Beer, BatteryCharging, Heart, Award, Smartphone 
+import {
+  Coffee, Wifi, Zap, Utensils, DollarSign, Moon, Shield, Tv,
+  Music, Gamepad2, Beer, BatteryCharging, Heart, Award, Smartphone
 } from "lucide-vue-next";
-const fileInputRef = ref(null)
 
 // Objek mapping icon agar bisa di-looping di template
 const iconMap = {
-  Coffee, Wifi, Zap, Utensils, DollarSign, Moon, Shield, Tv, 
+  Coffee, Wifi, Zap, Utensils, DollarSign, Moon, Shield, Tv,
   Music, Gamepad2, Beer, BatteryCharging, Heart, Award, Smartphone
 };
 
@@ -396,8 +400,8 @@ const cropType = ref("hero");
 const form = ref({
   hero_headline: "Warkop Level Up Masashimura",
   hero_subheadline: "Tempat nongkrong kasual modern di Bekasi.",
-  hero_bg_image: null,    // ← baru — background parallax
-  hero_food_image: null,  // ← existing — foto kotak kanan
+  hero_bg_image: null,
+  hero_food_image: null,
   marquee_text: "MASA SIH MURAH? • WARKOP EVOLUTION • GOOD FOOD • GOOD VIBES",
   about_text: "",
   about_image: null,
@@ -413,6 +417,8 @@ const galleryData = ref([]);
 // Form State CRUD Modal Local
 const editingBentoId = ref(null);
 const bentoForm = ref({ title: "", icon_name: "Coffee", size: "normal", order: 0 });
+
+const editingGalleryId = ref(null);
 const galleryForm = ref({ title: "", image_url: "", category: "Event" });
 
 // ================= INTEGRASI FETCH DATA SINKRONUS =================
@@ -423,7 +429,7 @@ const fetchHomepageData = async () => {
       axios.get(`${API_BASE_URL}/api/homepage/bento/`),
       axios.get(`${API_BASE_URL}/api/homepage/gallery/`)
     ]);
-    
+
     if (coreRes.data) form.value = { ...form.value, ...coreRes.data };
     if (bentoRes.data) bentoFacilities.value = bentoRes.data;
     if (galleryRes.data) galleryData.value = galleryRes.data;
@@ -441,6 +447,7 @@ const saveHomepageData = async () => {
 
   const payload = { ...form.value };
   if (payload.hero_food_image === "") payload.hero_food_image = null;
+  if (payload.hero_bg_image === "") payload.hero_bg_image = null;
   if (payload.about_image === "") payload.about_image = null;
 
   try {
@@ -456,7 +463,9 @@ const saveHomepageData = async () => {
   }
 };
 
-// ================= ENGINE CLOUDINARY FOR CROPPER & GALLERY =================
+// ================= ENGINE CLOUDINARY UNTUK CROPPER (HERO, ABOUT, GALLERY) =================
+// Satu jalur upload+crop terpusat dipakai bersama oleh hero/about/gallery — ngga ada lagi
+// fungsi upload duplikat khusus galeri (uploadGalleryToCloudinary lama sudah dihapus).
 const triggerImageCrop = (event, type) => {
   cropType.value = type
 
@@ -500,32 +509,13 @@ const handleUploadToCloudinary = async (blobData) => {
       if (cropType.value === "hero_food") form.value.hero_food_image = data.secure_url
       if (cropType.value === "hero")      form.value.hero_food_image = data.secure_url // legacy
       if (cropType.value === "about")     form.value.about_image     = data.secure_url
+      if (cropType.value === "gallery")   galleryForm.value.image_url = data.secure_url
       toast.success("Foto berhasil diupload!", { id: toastId })
     }
   } catch {
     toast.error("Gagal upload gambar.", { id: toastId })
   }
 }
-
-// Khusus upload foto galeri langsung di modal tanpa crop biar cepet
-const uploadGalleryToCloudinary = async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  const toastId = toast.loading("Mengunggah foto event ke Cloudinary...");
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-
-  try {
-    const { data } = await axios.post(CLOUDINARY_UPLOAD_URL, formData);
-    if (data?.secure_url) {
-      galleryForm.value.image_url = data.secure_url;
-      toast.success("Media event secure di cloud server!", { id: toastId });
-    }
-  } catch (err) {
-    toast.error("Gagal mengunggah berkas gambar galeri.", { id: toastId });
-  }
-};
 
 // ================= CRUD SERVICES: 05. BENTO GRID =================
 const openBentoModal = (bento = null) => {
@@ -578,10 +568,22 @@ const deleteBento = async (id) => {
   }
 };
 
-// ================= CRUD SERVICES: 06. GALLERY EVENT =================
-const openGalleryModal = () => {
+// ================= CRUD SERVICES: 06. GALLERY EVENT (SEKARANG FULL EDIT) =================
+const openGalleryModal = (item = null) => {
   modalType.value = "gallery";
-  galleryForm.value = { title: "", image_url: "", category: "Event" };
+  if (item) {
+    // Mode edit: prefill judul, kategori, dan foto yang sudah ada
+    editingGalleryId.value = item.id;
+    galleryForm.value = {
+      title: item.title || "",
+      image_url: item.image_url,
+      category: item.category || "Event",
+    };
+  } else {
+    // Mode tambah baru
+    editingGalleryId.value = null;
+    galleryForm.value = { title: "", image_url: "", category: "Event" };
+  }
   showModal.value = true;
 };
 
@@ -593,13 +595,19 @@ const saveGalleryItem = async () => {
   const config = { headers: { Authorization: `Token ${token}` } };
 
   try {
-    await axios.post(`${API_BASE_URL}/api/homepage/gallery/create/`, galleryForm.value, config);
-    toast.success("Dokumentasi event berhasil dipublikasikan!");
+    if (editingGalleryId.value) {
+      // Update data yang sudah ada — tidak perlu hapus dulu
+      await axios.put(`${API_BASE_URL}/api/homepage/gallery/${editingGalleryId.value}/`, galleryForm.value, config);
+      toast.success("Dokumentasi event berhasil diperbarui!");
+    } else {
+      await axios.post(`${API_BASE_URL}/api/homepage/gallery/create/`, galleryForm.value, config);
+      toast.success("Dokumentasi event berhasil dipublikasikan!");
+    }
     showModal.value = false;
     const res = await axios.get(`${API_BASE_URL}/api/homepage/gallery/`);
     galleryData.value = res.data;
   } catch (err) {
-    toast.error("Gagal mengamankan foto event ke database.");
+    toast.error("Gagal menyimpan data dokumentasi foto ke database.");
   } finally {
     isSavingSub.value = false;
   }

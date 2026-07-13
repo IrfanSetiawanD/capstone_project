@@ -87,6 +87,53 @@
 
       </div>
 
+            <!-- PREDIKSI PENJUALAN (ML) -->
+      <div class="predict-section">
+        <div class="predict-header">
+          <div>
+            <h3 class="table-title">Prediksi Penjualan (Machine Learning)</h3>
+            <p class="table-sub" v-if="prediction && !predictionError">
+              Model: {{ predictionModelLabel }} · Update terakhir {{ formatDateTime(prediction.trained_at) }}
+            </p>
+            <p class="table-sub" v-else>Estimasi penjualan berdasarkan data historis</p>
+          </div>
+          <div class="predict-actions">
+            <div class="predict-highlight" v-if="prediction && !predictionError">
+              <span class="predict-highlight-label">Estimasi 7 Hari ke Depan</span>
+              <span class="predict-highlight-value">{{ formatPrice(prediction.next_7_days_total) }}</span>
+            </div>
+            <button class="retrain-btn" @click="retrainModel" :disabled="retraining">
+              {{ retraining ? 'Melatih…' : 'Latih Ulang' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="predictionLoading" class="empty-state">
+          <p class="empty-text">Memuat prediksi…</p>
+        </div>
+
+        <div v-else-if="predictionError" class="empty-state">
+          <div class="empty-icon">🤖</div>
+          <p class="empty-text">{{ predictionError }}</p>
+          <p class="empty-hint">Butuh lebih banyak data transaksi lunas dulu sebelum model bisa dilatih</p>
+        </div>
+
+        <div v-else class="chart-grid">
+          <div class="chart-card">
+            <h4 class="chart-title">Tren Penjualan Historis vs Prediksi</h4>
+            <div class="chart-wrap">
+              <Line :data="trendChartData" :options="trendChartOptions" />
+            </div>
+          </div>
+          <div class="chart-card">
+            <h4 class="chart-title">Hasil Prediksi 7 Hari ke Depan</h4>
+            <div class="chart-wrap">
+              <Bar :data="forecastBarData" :options="forecastBarOptions" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- TOP MENU TABLE -->
       <div class="table-card">
         <div class="table-header">
@@ -137,13 +184,21 @@
           </table>
         </div>
       </div>
+
     </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { Line, Bar } from 'vue-chartjs';
+import {
+  Chart as ChartJS, LineElement, PointElement, BarElement,
+  CategoryScale, LinearScale, Filler, Tooltip, Legend,
+} from 'chart.js';
 import apiClient from '@/api/client';
+
+ChartJS.register(LineElement, PointElement, BarElement, CategoryScale, LinearScale, Filler, Tooltip, Legend);
 
 const loading        = ref(true);
 const dateFrom       = ref(today());
@@ -198,6 +253,182 @@ const fetchStats = async () => {
 };
 
 onMounted(fetchStats);
+
+// ── Prediksi Penjualan (ML) ───────────────────────────────────────────────
+const prediction        = ref(null);
+const predictionLoading = ref(true);
+const predictionError   = ref('');
+const retraining        = ref(false);
+
+const predictionModelLabel = computed(() => {
+  if (!prediction.value) return '';
+  return prediction.value.model_used === 'random_forest' ? 'Random Forest' : 'Linear Regression';
+});
+
+const fetchPrediction = async () => {
+  predictionLoading.value = true;
+  predictionError.value = '';
+  try {
+    const { data } = await apiClient.get('/prediction/revenue/', {
+      params: { days: 7, history_days: 30 },
+    });
+    prediction.value = data;
+  } catch (err) {
+    prediction.value = null;
+    predictionError.value =
+      err.response?.data?.error || 'Belum ada model prediksi yang terlatih.';
+  } finally {
+    predictionLoading.value = false;
+  }
+};
+
+const retrainModel = async () => {
+  retraining.value = true;
+  try {
+    await apiClient.post('/prediction/revenue/train/');
+    await fetchPrediction();
+  } catch (err) {
+    predictionError.value = err.response?.data?.error || 'Gagal melatih ulang model.';
+  } finally {
+    retraining.value = false;
+  }
+};
+
+onMounted(fetchPrediction);
+
+function formatDateTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function shortDateLabel(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+}
+
+// Chart "Tren Historis vs Prediksi" — garis historis (solid) nyambung ke
+// garis prediksi (putus-putus) di titik terakhir data aktual, plus band
+// confidence interval (batas atas/bawah) di rentang prediksi.
+const trendChartData = computed(() => {
+  if (!prediction.value) return { labels: [], datasets: [] };
+
+  const history = prediction.value.history || [];
+  const preds   = prediction.value.predictions || [];
+  const labels  = [...history.map(h => shortDateLabel(h.date)), ...preds.map(p => shortDateLabel(p.date))];
+
+  const historyData = [...history.map(h => h.revenue), ...preds.map(() => null)];
+
+  // Titik jembatan: nilai aktual terakhir dipakai juga sebagai titik awal
+  // garis prediksi, biar dua garis itu nyambung visual di chart.
+  const bridgeValue = history.length ? history[history.length - 1].revenue : null;
+  const predData = [
+    ...history.map(() => null).slice(0, -1),
+    bridgeValue,
+    ...preds.map(p => p.predicted_revenue),
+  ];
+  const upperData = [...history.map(() => null).slice(0, -1), bridgeValue, ...preds.map(p => p.upper)];
+  const lowerData = [...history.map(() => null).slice(0, -1), bridgeValue, ...preds.map(p => p.lower)];
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'Batas Atas',
+        data: upperData,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(220,38,38,0.12)',
+        pointRadius: 0,
+        fill: '+1',
+        tension: 0.3,
+      },
+      {
+        label: 'Batas Bawah',
+        data: lowerData,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(220,38,38,0.12)',
+        pointRadius: 0,
+        fill: false,
+        tension: 0.3,
+      },
+      {
+        label: 'Prediksi',
+        data: predData,
+        borderColor: '#dc2626',
+        backgroundColor: '#dc2626',
+        borderDash: [6, 4],
+        pointRadius: 2,
+        tension: 0.3,
+        fill: false,
+      },
+      {
+        label: 'Data Historis',
+        data: historyData,
+        borderColor: '#60a5fa',
+        backgroundColor: '#60a5fa',
+        pointRadius: 2,
+        tension: 0.3,
+        fill: false,
+      },
+    ],
+  };
+});
+
+const trendChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: {
+      labels: {
+        color: 'rgba(255,255,255,0.5)',
+        font: { family: 'Inter', size: 10 },
+        filter: (item) => item.text === 'Data Historis' || item.text === 'Prediksi',
+      },
+    },
+    tooltip: {
+      filter: (item) => item.dataset.label === 'Data Historis' || item.dataset.label === 'Prediksi',
+      callbacks: {
+        label: (ctx) => `${ctx.dataset.label}: ${formatPrice(ctx.parsed.y)}`,
+      },
+    },
+  },
+  scales: {
+    x: { ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+    y: { ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 }, callback: (v) => formatPriceShort(v) }, grid: { color: 'rgba(255,255,255,0.04)' } },
+  },
+};
+
+const forecastBarData = computed(() => {
+  if (!prediction.value) return { labels: [], datasets: [] };
+  const preds = prediction.value.predictions || [];
+  return {
+    labels: preds.map(p => shortDateLabel(p.date)),
+    datasets: [{
+      label: 'Prediksi Revenue',
+      data: preds.map(p => p.predicted_revenue),
+      backgroundColor: '#dc2626',
+      borderRadius: 4,
+      maxBarThickness: 36,
+    }],
+  };
+});
+
+const forecastBarOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { callbacks: { label: (ctx) => formatPrice(ctx.parsed.y) } },
+  },
+  scales: {
+    x: { ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } }, grid: { display: false } },
+    y: { ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 }, callback: (v) => formatPriceShort(v) }, grid: { color: 'rgba(255,255,255,0.04)' } },
+  },
+};
+
+function formatPriceShort(value) {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}jt`;
+  if (value >= 1000) return `${Math.round(value / 1000)}rb`;
+  return value;
+}
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
@@ -452,6 +683,7 @@ const formatPrice = (value) =>
   border: 1px solid rgba(255,255,255,0.05);
   border-radius: 16px;
   overflow: hidden;
+  margin-bottom: 1.5rem;
 }
 .table-header {
   display: flex;
@@ -579,6 +811,85 @@ const formatPrice = (value) =>
   min-width: 2.5rem;
   text-align: right;
 }
+
+/* ── Predict Section ─────────────────────────────────────────────── */
+.predict-section {
+  background: #0f0f0f;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+}
+.predict-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.predict-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.predict-highlight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+.predict-highlight-label {
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+}
+.predict-highlight-value {
+  font-family: 'Inter', monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #ef4444;
+}
+.retrain-btn {
+  padding: 0.45rem 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(220,38,38,0.3);
+  background: rgba(220,38,38,0.08);
+  color: #ef4444;
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+.retrain-btn:hover:not(:disabled) { background: rgba(220,38,38,0.18); }
+.retrain-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1.25rem;
+}
+@media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+
+.chart-card {
+  background: #131313;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 1.1rem 1.2rem;
+}
+.chart-title {
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  margin: 0 0 1rem 0;
+}
+.chart-wrap { height: 260px; position: relative; }
 
 /* ── Responsive tweaks ───────────────────────────────────────────── */
 @media (max-width: 768px) {

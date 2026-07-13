@@ -24,17 +24,21 @@ export const useLoyaltyStore = defineStore("loyalty", () => {
       loyalCustomers.value = [
         {
           phone: "6281234567890",
-          month: "Mei 2026",
-          order_count: 15,
+          name: "Budi",
+          total_orders: 15,
           total_spent: 2450000,
-          is_loyal: true,
+          points: 42,
+          last_order_at: new Date().toISOString(),
+          points_expired: false,
         },
         {
           phone: "6289876543210",
-          month: "Mei 2026",
-          order_count: 12,
+          name: "Siti",
+          total_orders: 12,
           total_spent: 1850000,
-          is_loyal: true,
+          points: 8,
+          last_order_at: new Date().toISOString(),
+          points_expired: false,
         },
       ];
     } finally {

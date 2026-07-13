@@ -118,10 +118,10 @@
               placeholder="08123456789"
             />
             <p v-if="checkingLoyalty" class="font-mono text-[10px] text-zinc-700">Mengecek status member...</p>
-            <div v-else-if="cartStore.isLoyal" class="flex items-center gap-1.5">
+            <div v-else-if="cartStore.isMember" class="flex items-center gap-1.5 mt-1">
               <span class="w-3 h-px bg-emerald-500/60"></span>
               <p class="font-mono text-[10px] text-emerald-500">
-                Member aktif · diskon {{ cartStore.discountPercent }}%
+                Member aktif · Poin saat ini: {{ cartStore.points }}
               </p>
             </div>
           </div>
@@ -225,14 +225,41 @@
               <span class="font-mono text-[11px] text-zinc-600">Subtotal</span>
               <span class="font-mono text-[11px] text-zinc-400">{{ formatPrice(cartStore.subtotal) }}</span>
             </div>
-            <div v-if="cartStore.isLoyal" class="flex justify-between items-center">
-              <span class="font-mono text-[11px] text-emerald-600">Diskon member ({{ cartStore.discountPercent }}%)</span>
-              <span class="font-mono text-[11px] text-emerald-500">−{{ formatPrice(cartStore.discountAmount) }}</span>
+
+            <!-- Kode Promo -->
+            <PromoCodeBox
+              ref="promoBoxRef"
+              :subtotal="cartStore.totalPrice"
+              @applied="onPromoApplied"
+              @removed="onPromoRemoved"
+            />
+
+            <div v-if="appliedPromo" class="flex justify-between items-center">
+              <span class="font-mono text-[11px] text-emerald-600">Diskon Promo ({{ appliedPromo.code }})</span>
+              <span class="font-mono text-[11px] text-emerald-500">−{{ formatPrice(appliedPromo.discount_amount) }}</span>
             </div>
+
+            <!-- Tukar Poin -->
+            <PointRedeemBox
+              :points="pointsBalance"
+              :affordable="affordableRewards"
+              :locked="lockedRewards"
+              v-model:selected-ids="selectedRewardIds"
+            />
+
+            <div
+              v-for="reward in selectedRewards"
+              :key="`reward-${reward.id}`"
+              class="flex justify-between items-center"
+            >
+              <span class="font-mono text-[11px] text-amber-500">🎁 {{ reward.menu_name }} (gratis)</span>
+              <span class="font-mono text-[11px] text-zinc-600">−{{ reward.point_cost.toLocaleString("id-ID") }} poin</span>
+            </div>
+
             <div class="flex justify-between items-center pt-2 border-t border-white/[0.05]">
               <span class="font-mono text-[10px] tracking-widest text-zinc-600 uppercase">Total Bayar</span>
               <span class="font-mono text-xl font-bold text-amber-400 tracking-tight leading-none">
-                {{ formatPrice(cartStore.totalPrice) }}
+                {{ formatPrice(finalTotal) }}
               </span>
             </div>
           </div>
@@ -264,7 +291,8 @@ import { orderAPI, getMediaUrl } from "@/api"
 import { toast } from "vue-sonner"
 import { X, ShoppingCart, Upload, ArrowRight } from "lucide-vue-next"
 import { useStoreSettings } from "@/composables/useStoreSettings"
-
+import PromoCodeBox from "@/components/ui/PromoCodeBox.vue"
+import PointRedeemBox from "@/components/ui/PointRedeemBox.vue"
 
 const cartStore     = useCartStore()
 const router        = useRouter()
@@ -280,13 +308,53 @@ const proofCloudinaryUrl = ref("")
 const isUploadingProof   = ref(false)
 const uploadError        = ref("")
 
-// ── Admin WhatsApp (dinamis dari API / localStorage) ──────────────────────────
-const { adminWhatsapp, isStoreOpen, closedMessage, fetchSettings } = useStoreSettings()
-onMounted(() => fetchSettings())
+// ── Promo code ──────────────────────────────────────────────────────────────
+const promoBoxRef  = ref(null)
+const appliedPromo = ref(null)
 
-// ── Hapus baris ini dari kode lama: ──────────────────────────────────────────
-// const ADMIN_WHATSAPP = import.meta.env.VITE_ADMIN_WHATSAPP || "6285773615870"
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Tukar poin loyalty ───────────────────────────────────────────────────────
+const pointsBalance     = ref(0)
+const affordableRewards = ref([]) 
+const lockedRewards     = ref([]) 
+const selectedRewardIds = ref([])
+
+const selectedRewards = computed(() =>
+  affordableRewards.value.filter((r) => selectedRewardIds.value.includes(r.id))
+)
+
+const fetchPointRewards = async (phoneNumber) => {
+  try {
+    const { data } = await orderAPI.getAvailablePointRewards(phoneNumber)
+    pointsBalance.value     = data.points ?? 0
+    affordableRewards.value = data.affordable ?? []
+    lockedRewards.value     = data.locked ?? []
+  } catch (err) {
+    console.error(err)
+    pointsBalance.value = 0
+    affordableRewards.value = []
+    lockedRewards.value = []
+  }
+}
+
+const resetPointRewards = () => {
+  pointsBalance.value = 0
+  affordableRewards.value = []
+  lockedRewards.value = []
+  selectedRewardIds.value = []
+}
+
+// Total setelah dikurangi diskon promo (reward poin gratis Rp0, dihandle backend)
+const finalTotal = computed(() => {
+  const promoDiscount = appliedPromo.value?.discount_amount || 0
+  return Math.max(cartStore.totalPrice - promoDiscount, 0)
+})
+
+const onPromoApplied = (promo) => { appliedPromo.value = promo }
+const onPromoRemoved  = () => { appliedPromo.value = null }
+
+// ── Admin WhatsApp (dinamis dari API / localStorage) ──────────────────────────
+const { adminWhatsapp, isStoreOpen, fetchSettings } = useStoreSettings()
+onMounted(() => fetchSettings())
 
 const CLOUDINARY_CLOUD  = "dndonk7an"
 const CLOUDINARY_PRESET = "masashimura_preset"
@@ -301,17 +369,24 @@ const formatPrice = (p) =>
 let debounceTimer = null
 watch(phone, (newPhone) => {
   clearTimeout(debounceTimer)
+  
   if (!newPhone || newPhone.length < 9) {
-    cartStore.isLoyal = false
-    cartStore.discountPercent = 0
+    cartStore.isMember = false
+    cartStore.points = 0
+    resetPointRewards()
     return
   }
+  
   checkingLoyalty.value = true
   debounceTimer = setTimeout(async () => {
-    await cartStore.checkLoyalty(newPhone)
+    await Promise.all([
+      cartStore.checkLoyalty(newPhone),
+      fetchPointRewards(newPhone),
+    ])
     checkingLoyalty.value = false
   }, 600)
 })
+
 onBeforeUnmount(() => clearTimeout(debounceTimer))
 
 // ── Payment ───────────────────────────────────────────────────────────────────
@@ -387,8 +462,14 @@ const sendToWhatsApp = (orderNumber) => {
     })
     .join("\n")
 
-  const loyaltyLine = cartStore.isLoyal
-    ? `Diskon Member (${cartStore.discountPercent}%): -Rp ${cartStore.discountAmount.toLocaleString("id-ID")}\n`
+  const promoLine = appliedPromo.value
+    ? `Diskon Promo (${appliedPromo.value.code}): -Rp ${appliedPromo.value.discount_amount.toLocaleString("id-ID")}\n`
+    : ""
+
+  const rewardLine = selectedRewards.value.length
+    ? selectedRewards.value
+        .map((r) => `   🎁 ${r.menu_name} (tukar ${r.point_cost.toLocaleString("id-ID")} poin)`)
+        .join("\n") + "\n"
     : ""
 
   const proofLine = proofCloudinaryUrl.value
@@ -405,8 +486,9 @@ const sendToWhatsApp = (orderNumber) => {
     `===========================\n` +
     `*Pesanan:*\n${itemsText}\n` +
     `===========================\n` +
-    `${loyaltyLine}` +
-    `*TOTAL: Rp ${cartStore.totalPrice.toLocaleString("id-ID")}*\n` +
+    `${promoLine}` +
+    `${rewardLine}` +
+    `*TOTAL: Rp ${finalTotal.value.toLocaleString("id-ID")}*\n` +
     `${proofLine}` +
     `===========================\n` +
     `Mohon segera diproses, terima kasih!`
@@ -422,8 +504,8 @@ const checkout = async () => {
     return toast.error("Upload bukti pembayaran QRIS dulu ya!")
 
   // Guard: pastikan nomor admin sudah ada sebelum proses
-  if (!adminWhatsapp.value) {
-    await fetchAdminWhatsapp()
+    if (!adminWhatsapp.value) {
+    await fetchSettings()
     if (!adminWhatsapp.value) {
       toast.error("Nomor WhatsApp admin belum dikonfigurasi. Hubungi admin.")
       return
@@ -436,6 +518,9 @@ const checkout = async () => {
       source:         "web",
       customer:       { phone: phone.value, name: name.value },
       payment_method: paymentMethod.value,
+      promo_id:               appliedPromo.value?.promo_id || null,
+      promo_discount_amount:  appliedPromo.value?.discount_amount || 0,
+      redeem_reward_ids:      selectedRewardIds.value,
       items: Object.values(cartStore.cart).map((item) => ({
         menu_id:  item.id,
         quantity: item.quantity,
@@ -453,6 +538,8 @@ const checkout = async () => {
     name.value  = ""
     phone.value = ""
     clearProof()
+    promoBoxRef.value?.removePromo()
+    resetPointRewards()
     router.push("/")
   } catch (error) {
     toast.error(

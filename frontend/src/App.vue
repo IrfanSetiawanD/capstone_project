@@ -13,7 +13,7 @@
       <router-view />
     </template>
 
-    <Toaster position="top-center" rich-colors />
+    <Toaster position="top-center" richColors theme="dark" expand />
   </div>
 </template>
 

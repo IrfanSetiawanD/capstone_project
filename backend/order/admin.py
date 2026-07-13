@@ -4,6 +4,8 @@ from .models import (
     OrderItem,
     CustomerLoyalty,
     LoyaltySettings,
+    PointReward,
+    PointAdjustment,
 )
 
 
@@ -67,7 +69,10 @@ class CustomerLoyaltyAdmin(admin.ModelAdmin):
     list_display = (
         "phone",
         "name",
-        "special_discount_percentage",
+        "points",
+        "total_orders",
+        "total_spent",
+        "last_order_at",
     )
 
     search_fields = (
@@ -84,3 +89,18 @@ class LoyaltySettingsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(PointReward)
+class PointRewardAdmin(admin.ModelAdmin):
+    list_display = ("menu", "point_cost", "is_active", "updated_at")
+    list_filter = ("is_active",)
+    search_fields = ("menu__name",)
+
+
+@admin.register(PointAdjustment)
+class PointAdjustmentAdmin(admin.ModelAdmin):
+    list_display = ("customer", "amount", "reason", "admin_name", "created_at")
+    list_filter = ("reason",)
+    search_fields = ("customer__phone", "customer__name", "note")
+    readonly_fields = ("created_at",)

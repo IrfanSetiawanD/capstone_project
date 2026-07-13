@@ -114,29 +114,41 @@
           </router-link>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-white/[0.05]">
-          <div v-for="(item, idx) in bestSellers" :key="idx"
-            class="bg-[#080808] group overflow-hidden flex flex-col">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div
+            v-for="(item, idx) in bestSellers"
+            :key="idx"
+            class="bg-[#080808] rounded-2xl overflow-hidden border border-white/5 group flex flex-col hover:-translate-y-1 hover:border-[#DC2626]/40 transition-all duration-300"
+          >
             <!-- Foto -->
-            <div class="relative aspect-[4/3] overflow-hidden bg-zinc-900">
-              <img :src="item.image" :alt="item.name"
-                class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 grayscale-[20%] group-hover:grayscale-0" />
-              <!-- Nomor urut -->
-              <div class="absolute top-4 left-4 font-mono text-[10px] text-white/30">
-                {{ String(idx + 1).padStart(2, '0') }}
+            <div class="relative w-full aspect-[4/3] shrink-0 overflow-hidden bg-zinc-900">
+              <img
+                :src="item.image"
+                :alt="item.name"
+                loading="lazy"
+                class="w-full h-full object-cover"
+              />
+              <div class="absolute top-3 left-3 font-mono text-[10px] text-white/50 bg-black/40 px-1.5 py-0.5 rounded">
+                {{ String(idx + 1).padStart(2,'0') }}
               </div>
             </div>
+
             <!-- Info -->
-            <div class="p-6 flex flex-col gap-3 flex-1 border-t border-white/5">
-              <h3 class="font-sora text-sm font-bold uppercase tracking-wide text-white group-hover:text-[#DC2626] transition-colors">
+            <div class="p-5 flex flex-col gap-3 flex-1">
+              <h3
+                class="font-sora text-base font-bold uppercase tracking-wide text-white group-hover:text-[#DC2626] transition-colors">
                 {{ item.name }}
               </h3>
-              <p class="text-zinc-600 text-xs font-light leading-relaxed flex-1 line-clamp-2">{{ item.desc }}</p>
-              <div class="flex items-center justify-between pt-2 border-t border-white/5">
-                <span class="font-mono text-sm font-bold text-[#DC2626]">Rp {{ item.price.toLocaleString('id-ID') }}</span>
-                <router-link to="/menu"
-                  class="font-mono text-[9px] tracking-[0.2em] uppercase text-zinc-600 hover:text-white transition">
-                  Order →
+              <p class="text-zinc-400 text-sm leading-relaxed flex-1 line-clamp-2">{{ item.desc }}</p>
+              <div class="flex items-center justify-between pt-4 mt-2 border-t border-white/10">
+                <span class="font-mono text-lg font-bold text-[#DC2626]">
+                  Rp {{ item.price.toLocaleString('id-ID') }}
+                </span>
+                <router-link
+                  to="/menu"
+                  class="px-4 py-2 rounded-full bg-[#DC2626] text-white text-[10px] uppercase tracking-wider hover:bg-red-700 transition"
+                >
+                  Order
                 </router-link>
               </div>
             </div>
@@ -144,7 +156,7 @@
 
           <!-- Empty state -->
           <div v-if="bestSellers.length === 0"
-            class="col-span-3 py-20 text-center text-zinc-700 font-mono text-xs tracking-widest uppercase">
+            class="col-span-full py-20 text-center text-zinc-700 font-mono text-xs tracking-widest uppercase">
             Memuat menu...
           </div>
         </div>
@@ -159,7 +171,7 @@
           <!-- Foto outlet -->
           <div class="relative">
             <div class="aspect-square overflow-hidden">
-              <img :src="cms.about_image || defaultAboutImage" alt="Suasana Masashimura"
+              <img :src="cms.about_image || defaultAboutImage" alt="Suasana Masashimura" loading="lazy"
                 class="w-full h-full object-cover grayscale-[15%] hover:grayscale-0 transition duration-700" />
             </div>
             <!-- Aksen garis merah pojok -->
@@ -244,11 +256,11 @@
       </section>
 
       <!-- ═══════════════════════════════════════════
-           6. GALLERY
+           6. GALLERY (Diperbaiki — dense grid dinamis, filter kategori, lightbox)
       ═══════════════════════════════════════════ -->
       <section class="py-32 border-t border-white/[0.06] bg-[#0a0a0a]">
         <div class="max-w-7xl mx-auto px-6 sm:px-10">
-          <div class="mb-16 space-y-3">
+          <div class="mb-10 space-y-3">
             <div class="flex items-center gap-3">
               <span class="w-6 h-px bg-[#DC2626]"></span>
               <span class="font-mono text-[10px] tracking-[0.3em] text-[#DC2626] uppercase">Dokumentasi</span>
@@ -256,45 +268,97 @@
             <h2 class="font-sora text-3xl sm:text-4xl font-extrabold uppercase tracking-tight">Gallery</h2>
           </div>
 
-          <!-- Grid asimetris -->
-          <div class="grid grid-cols-12 gap-3">
-            <template v-for="(img, i) in displayedGallery" :key="i">
-              <!-- Item pertama = besar -->
-              <div v-if="i === 0" class="col-span-12 sm:col-span-7 aspect-[16/9] overflow-hidden relative group">
-                <img :src="img.image_url" :alt="img.title"
-                  class="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" />
-                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6">
-                  <p class="font-sora text-xs font-bold uppercase tracking-wider text-white">{{ img.title }}</p>
-                </div>
-              </div>
-              <!-- Dua tengah = kolom kanan -->
-              <div v-else-if="i === 1 || i === 2"
-                :class="[i === 1 ? 'col-span-6 sm:col-span-5' : 'col-span-6 sm:col-span-5', 'overflow-hidden relative group aspect-square sm:aspect-auto']"
-                :style="i === 2 ? 'grid-row: span 1' : ''"
-              >
-                <img :src="img.image_url" :alt="img.title"
-                  class="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" />
-                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                  <p class="font-sora text-[10px] font-bold uppercase tracking-wider text-white">{{ img.title }}</p>
-                </div>
-              </div>
-              <!-- Sisanya = grid normal 4 kolom -->
-              <div v-else class="col-span-6 sm:col-span-3 aspect-square overflow-hidden relative group">
-                <img :src="img.image_url" :alt="img.title"
-                  class="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" />
-                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                  <p class="font-sora text-[10px] font-bold uppercase tracking-wider text-white">{{ img.title }}</p>
-                </div>
-              </div>
-            </template>
+          <!-- Filter kategori — cuma muncul kalau memang ada lebih dari 1 kategori nyata -->
+          <div v-if="galleryCategories.length > 2" class="flex flex-wrap gap-2 mb-10">
+            <button
+              v-for="cat in galleryCategories"
+              :key="cat"
+              type="button"
+              @click="setCategory(cat)"
+              :class="[
+                activeCategory === cat
+                  ? 'bg-[#DC2626] border-[#DC2626] text-white'
+                  : 'bg-transparent border-white/10 text-zinc-400 hover:border-white/30 hover:text-white',
+                'px-4 py-2 rounded-full border font-mono text-[10px] tracking-[0.15em] uppercase transition-all cursor-pointer'
+              ]"
+            >
+              {{ cat }}
+            </button>
+          </div>
 
-            <div v-if="displayedGallery.length === 0"
-              class="col-span-12 py-20 text-center text-zinc-700 font-mono text-xs tracking-widest uppercase border border-dashed border-white/10">
+          <!-- Dense grid: item pertama besar, sisanya kotak seragam — otomatis rapi berapa pun jumlah fotonya -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 grid-flow-row-dense auto-rows-[140px] sm:auto-rows-[170px] gap-3">
+            <button
+              v-for="(img, i) in visibleGallery"
+              :key="img.id ?? img.image_url"
+              type="button"
+              @click="openLightbox(i)"
+              :class="[
+                i === 0 ? 'col-span-2 row-span-2' : '',
+                'relative overflow-hidden group text-left bg-zinc-900 border-0 p-0 cursor-pointer'
+              ]"
+            >
+              <img :src="img.image_url" :alt="img.title || 'Dokumentasi Masashimura'" loading="lazy"
+                class="w-full h-full object-cover grayscale-[15%] group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700" />
+              <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                <div class="space-y-0.5">
+                  <p class="font-sora text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white line-clamp-1">{{ img.title || 'Masashimura' }}</p>
+                  <p v-if="img.category" class="font-mono text-[9px] tracking-[0.2em] text-zinc-400 uppercase">{{ img.category }}</p>
+                </div>
+              </div>
+              <div class="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/50 border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <Expand :size="13" class="text-white" />
+              </div>
+            </button>
+
+            <div v-if="visibleGallery.length === 0"
+              class="col-span-full py-20 text-center text-zinc-700 font-mono text-xs tracking-widest uppercase border border-dashed border-white/10">
               Belum ada foto.
             </div>
           </div>
+
+          <!-- Muat lebih banyak -->
+          <div v-if="filteredGallery.length > visibleGallery.length" class="flex justify-center mt-10">
+            <button type="button" @click="galleryLimit += 8"
+              class="font-mono text-[10px] tracking-[0.25em] uppercase text-zinc-500 hover:text-white border border-white/10 hover:border-white/30 px-6 py-3 transition-all cursor-pointer">
+              Muat Lebih Banyak
+            </button>
+          </div>
         </div>
       </section>
+
+      <!-- LIGHTBOX GALLERY -->
+      <transition name="lightbox-fade">
+        <div v-if="lightboxIndex !== null"
+          class="fixed inset-0 z-[60] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 sm:p-10"
+          @click.self="closeLightbox"
+        >
+          <button type="button" @click="closeLightbox"
+            class="absolute top-5 right-5 sm:top-8 sm:right-8 w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white transition cursor-pointer">
+            <X :size="18" />
+          </button>
+
+          <button v-if="visibleGallery.length > 1" type="button" @click.stop="prevImage"
+            class="absolute left-3 sm:left-8 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white transition cursor-pointer">
+            <ChevronLeft :size="20" />
+          </button>
+          <button v-if="visibleGallery.length > 1" type="button" @click.stop="nextImage"
+            class="absolute right-3 sm:right-8 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white transition cursor-pointer">
+            <ChevronRight :size="20" />
+          </button>
+
+          <div class="max-w-4xl w-full space-y-4" @click.stop>
+            <div class="max-h-[75vh] flex items-center justify-center overflow-hidden">
+              <img :src="currentLightboxImage?.image_url" :alt="currentLightboxImage?.title || 'Masashimura'"
+                class="max-h-[75vh] max-w-full object-contain" />
+            </div>
+            <div class="text-center space-y-1">
+              <p class="font-sora text-sm font-bold uppercase tracking-wider text-white">{{ currentLightboxImage?.title || 'Masashimura' }}</p>
+              <p v-if="currentLightboxImage?.category" class="font-mono text-[9px] tracking-[0.25em] text-zinc-500 uppercase">{{ currentLightboxImage.category }}</p>
+            </div>
+          </div>
+        </div>
+      </transition>
 
       <!-- ═══════════════════════════════════════════
            7. REVIEW
@@ -349,7 +413,7 @@
               Udah<br/>Laper?
             </h2>
             <p class="text-zinc-500 text-sm font-light max-w-xs leading-relaxed">
-              Pilih menu favorit  dan nikmati langsung di kedai atau melalui web ordering.
+              Pilih menu favorit dan nikmati langsung di kedai atau melalui web ordering.
             </p>
           </div>
           <div class="flex flex-col sm:flex-row gap-4">
@@ -373,9 +437,10 @@
 import { ref, computed, onMounted, onUnmounted } from "vue"
 import {
   Coffee, Wifi, Zap, Utensils, DollarSign, Moon, Shield, Tv,
-  Music, Gamepad2, Beer, BatteryCharging, Heart, Award, Smartphone
+  Music, Gamepad2, Beer, BatteryCharging, Heart, Award, Smartphone,
+  Expand, X, ChevronLeft, ChevronRight
 } from "lucide-vue-next"
-import axios from "axios"
+import apiClient from "@/api/client"
 
 const isLoading          = ref(true)
 const scrollY            = ref(0)
@@ -407,12 +472,57 @@ const iconMap = {
   Music, Gamepad2, Beer, BatteryCharging, Heart, Award, Smartphone
 }
 
-const displayedGallery = computed(() => galleryData.value.slice(0, 6))
+// ── Gallery: filter kategori + pagination + lightbox ──────────────────────
+const activeCategory = ref("Semua")
+const galleryLimit    = ref(8)
+const lightboxIndex   = ref(null)
 
-// ── Data fetchers (endpoint tidak diubah) ────────────────────────────────────
+// Ambil daftar kategori unik dari data galeri (hasilnya konsisten walau data berubah)
+const galleryCategories = computed(() => {
+  const cats = new Set(galleryData.value.map(g => g.category).filter(Boolean))
+  return ["Semua", ...cats]
+})
+
+const filteredGallery = computed(() => {
+  if (activeCategory.value === "Semua") return galleryData.value
+  return galleryData.value.filter(g => g.category === activeCategory.value)
+})
+
+// Grid dense butuh array terpotong biar tombol "Muat Lebih Banyak" konsisten
+const visibleGallery = computed(() => filteredGallery.value.slice(0, galleryLimit.value))
+
+const currentLightboxImage = computed(() =>
+  lightboxIndex.value !== null ? visibleGallery.value[lightboxIndex.value] : null
+)
+
+const setCategory = (cat) => {
+  activeCategory.value = cat
+  galleryLimit.value = 8
+}
+
+const openLightbox  = (i) => { lightboxIndex.value = i }
+const closeLightbox = () => { lightboxIndex.value = null }
+
+const nextImage = () => {
+  if (lightboxIndex.value === null || visibleGallery.value.length === 0) return
+  lightboxIndex.value = (lightboxIndex.value + 1) % visibleGallery.value.length
+}
+const prevImage = () => {
+  if (lightboxIndex.value === null || visibleGallery.value.length === 0) return
+  lightboxIndex.value = (lightboxIndex.value - 1 + visibleGallery.value.length) % visibleGallery.value.length
+}
+
+const handleLightboxKeydown = (e) => {
+  if (lightboxIndex.value === null) return
+  if (e.key === "Escape")     closeLightbox()
+  if (e.key === "ArrowRight") nextImage()
+  if (e.key === "ArrowLeft")  prevImage()
+}
+
+// ── Data fetchers ─────────────────────────────────────────────────────────
 const fetchCMSData = async () => {
   try {
-    const { data: d } = await axios.get("http://127.0.0.1:8000/api/homepage/config/current/")
+    const { data: d } = await apiClient.get("/homepage/config/current/")
     cms.value = {
       hero_headline:    d.hero_headline?.trim()    || "Warkop Level Up\nMasashimura",
       hero_subheadline: d.hero_subheadline?.trim() || "Tempat nongkrong kasual modern di Bekasi dengan cita rasa nikmat.",
@@ -432,7 +542,7 @@ const fetchCMSData = async () => {
 
 const fetchBestSellers = async () => {
   try {
-    const { data } = await axios.get("http://127.0.0.1:8000/api/menus/bestsellers/")
+    const { data } = await apiClient.get("/menus/bestsellers/")
     if (Array.isArray(data) && data.length > 0) {
       bestSellers.value = data.map(item => ({
         name:  item.name,
@@ -446,32 +556,18 @@ const fetchBestSellers = async () => {
   }
 }
 
-const fetchGoogleReviews = async () => {
-  try {
-    const { data } = await axios.get("http://127.0.0.1:8000/api/homepage/reviews/maps/")
-    reviews.value = data?.length > 0 ? data : fallbackReviews
-  } catch {
-    reviews.value = fallbackReviews
-  }
-}
-
 const fallbackReviews = [
   { name: "Irfan Setya",  status: "Maps Local Guide", text: "WiFi kenceng, makanannya enak, harga mahasiswa — Masashimura jawara nongkrong di Bekasi!" },
   { name: "Helen S",      status: "Maps Reviewer",    text: "Tiap kali nyari tempat yang gak bising tapi estetik minimalis, selalu balik ke Masashimura." },
   { name: "Dimas R",      status: "Regular Customer", text: "Beef yakiniku-nya gak ada lawannya di harga segitu. Seriously underrated." },
 ]
 
-const fetchBentoAndGallery = async () => {
+const fetchGoogleReviews = async () => {
   try {
-    const [b, g] = await Promise.all([
-      axios.get("http://127.0.0.1:8000/api/homepage/bento/"),
-      axios.get("http://127.0.0.1:8000/api/homepage/gallery/"),
-    ])
-    bentoFacilities.value = b.data?.length > 0 ? b.data : fallbackBento
-    galleryData.value     = g.data?.length > 0 ? g.data : fallbackGallery
+    const { data } = await apiClient.get("/homepage/reviews/maps/")
+    reviews.value = data?.length > 0 ? data : fallbackReviews
   } catch {
-    bentoFacilities.value = fallbackBento
-    galleryData.value     = fallbackGallery
+    reviews.value = fallbackReviews
   }
 }
 
@@ -483,16 +579,31 @@ const fallbackBento = [
 ]
 
 const fallbackGallery = [
-  { title: "Suasana Kedai", image_url: defaultHeroBg },
-  { title: "Menu Andalan",  image_url: defaultHeroFood },
+  { title: "Suasana Kedai", image_url: defaultHeroBg,   category: "Suasana Kedai" },
+  { title: "Menu Andalan",  image_url: defaultHeroFood,  category: "Best Seller" },
 ]
 
-// ── Scroll parallax ──────────────────────────────────────────────────────────
+const fetchBentoAndGallery = async () => {
+  try {
+    const [b, g] = await Promise.all([
+      apiClient.get("/homepage/bento/"),
+      apiClient.get("/homepage/gallery/"),
+    ])
+    bentoFacilities.value = b.data?.length > 0 ? b.data : fallbackBento
+    galleryData.value     = g.data?.length > 0 ? g.data : fallbackGallery
+  } catch {
+    bentoFacilities.value = fallbackBento
+    galleryData.value     = fallbackGallery
+  }
+}
+
+// ── Scroll parallax ──────────────────────────────────────────────────────
 const handleScroll = () => { scrollY.value = window.scrollY }
 
-// ── Lifecycle ────────────────────────────────────────────────────────────────
+// ── Lifecycle ────────────────────────────────────────────────────────────
 onMounted(async () => {
   window.addEventListener("scroll", handleScroll, { passive: true })
+  window.addEventListener("keydown", handleLightboxKeydown)
   await Promise.all([fetchCMSData(), fetchBestSellers(), fetchGoogleReviews(), fetchBentoAndGallery()])
   isLoading.value = false
   reviewInterval = setInterval(() => {
@@ -503,6 +614,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener("scroll", handleScroll)
+  window.removeEventListener("keydown", handleLightboxKeydown)
   if (reviewInterval) clearInterval(reviewInterval)
 })
 </script>
@@ -524,4 +636,13 @@ onUnmounted(() => {
 .review-fade-enter-from { opacity: 0; transform: translateY(8px); }
 .review-fade-leave-to   { opacity: 0; transform: translateY(-8px); }
 .review-fade-leave-active { position: absolute; width: 100%; }
+
+.lightbox-fade-enter-active,
+.lightbox-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+.lightbox-fade-enter-from,
+.lightbox-fade-leave-to {
+  opacity: 0;
+}
 </style>

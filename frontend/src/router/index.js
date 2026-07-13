@@ -49,6 +49,16 @@ const router = createRouter({
           component: () => import("../views/admin/ManageMenus.vue"),
         },
         {
+          path: "promos",
+          name: "AdminPromos",
+          component: () => import("../views/admin/AdminPromos.vue"),
+        },
+        {
+          path: "point-rewards",
+          name: "AdminPointRewards",
+          component: () => import("../views/admin/AdminPointRewards.vue"),
+        },
+        {
           path: "orders",
           name: "ActiveOrders",
           component: () => import("../views/admin/ActiveOrders.vue"),

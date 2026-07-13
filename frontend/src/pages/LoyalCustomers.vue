@@ -6,7 +6,7 @@
       <div>
         <p class="lc-eyebrow">Masashimura · Program Loyalitas</p>
         <h1 class="lc-title">Loyal Customers</h1>
-        <p class="lc-subtitle">Syarat: min. 10 pesanan &amp; Rp 100.000 dalam 1 bulan</p>
+        <p class="lc-subtitle">Poin didapat dari belanja, ditukar jadi menu gratis — hangus kalau {{ expiryLabel }}</p>
       </div>
       <button @click="refreshData" class="refresh-btn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -28,19 +28,19 @@
       </div>
       <div class="stat-card stat-green">
         <div class="stat-top">
-          <span class="stat-label">Loyal Member</span>
+          <span class="stat-label">Punya Poin Aktif</span>
           <span class="stat-dot dot-green"></span>
         </div>
-        <div class="stat-val val-green">{{ loyalCount }}</div>
-        <div class="stat-note">memenuhi syarat bulan ini</div>
+        <div class="stat-val val-green">{{ activePointsCount }}</div>
+        <div class="stat-note">saldo poin &gt; 0</div>
       </div>
       <div class="stat-card stat-amber">
         <div class="stat-top">
-          <span class="stat-label">Dapat Diskon</span>
+          <span class="stat-label">Total Poin Beredar</span>
           <span class="stat-dot dot-amber"></span>
         </div>
-        <div class="stat-val val-amber">{{ discountedCount }}</div>
-        <div class="stat-note">diskon aktif (khusus/member)</div>
+        <div class="stat-val val-amber">{{ totalPointsOutstanding }}</div>
+        <div class="stat-note">akumulasi semua member</div>
       </div>
     </div>
 
@@ -62,10 +62,10 @@
           <thead>
             <tr>
               <th>Pelanggan</th>
-              <th>Periode</th>
-              <th class="th-center">Pesanan</th>
+              <th>Order Terakhir</th>
+              <th class="th-center">Total Order</th>
               <th class="th-right">Total Belanja</th>
-              <th class="th-center">Diskon</th>
+              <th class="th-center">Poin</th>
               <th class="th-center">Status</th>
               <th class="th-center">Aksi</th>
             </tr>
@@ -79,49 +79,47 @@
               <!-- Phone -->
               <td class="td-phone">
                 <span class="phone-val">{{ customer.phone }}</span>
+                <span v-if="customer.name" class="phone-name">{{ customer.name }}</span>
               </td>
 
-              <!-- Periode -->
-              <td class="td-period">{{ customer.month || '—' }}</td>
+              <!-- Order terakhir -->
+              <td class="td-period">{{ customer.last_order_at ? formatDate(customer.last_order_at) : '—' }}</td>
 
-              <!-- Pesanan -->
+              <!-- Total order -->
               <td class="td-center">
-                <span class="order-count">{{ customer.order_count || 0 }}</span>
+                <span class="order-count">{{ customer.total_orders || 0 }}</span>
                 <span class="order-unit">order</span>
               </td>
 
               <!-- Belanja -->
               <td class="td-right td-spend">{{ formatPrice(customer.total_spent) }}</td>
 
-              <!-- Diskon -->
+              <!-- Poin -->
               <td class="td-center">
-                <div v-if="customer.special_discount_percentage != null" class="discount-badge badge-red">
-                  <span class="discount-pct">{{ customer.special_discount_percentage }}%</span>
-                  <span class="discount-lbl">Khusus</span>
+                <div v-if="customer.points > 0" class="discount-badge badge-green">
+                  <span class="discount-pct">{{ customer.points }}</span>
+                  <span class="discount-lbl">Poin</span>
                 </div>
-                <div v-else-if="customer.is_loyal" class="discount-badge badge-green">
-                  <span class="discount-pct">{{ defaultDiscount }}%</span>
-                  <span class="discount-lbl">Member</span>
-                </div>
-                <span v-else class="no-discount">—</span>
+                <span v-else class="no-discount">0</span>
               </td>
 
               <!-- Status -->
               <td class="td-center">
-                <span class="status-pill" :class="customer.is_loyal ? 'pill-loyal' : 'pill-regular'">
-                  {{ customer.is_loyal ? 'Loyal' : 'Regular' }}
+                <span
+                  v-if="customer.points_expired"
+                  class="status-pill pill-regular"
+                  :title="'Poin sudah hangus (order terakhir ' + formatDate(customer.last_order_at) + ')'"
+                >
+                  Poin Hangus
                 </span>
+                <span v-else-if="customer.points > 0" class="status-pill pill-loyal">Aktif</span>
+                <span v-else class="status-pill pill-regular">Belum Ada Poin</span>
               </td>
 
               <!-- Aksi -->
               <td class="td-center">
-                <button
-                  @click="openDiscountModal(customer)"
-                  :disabled="!customer.is_loyal"
-                  class="action-btn"
-                  :class="customer.is_loyal ? 'action-active' : 'action-disabled'"
-                >
-                  {{ customer.special_discount_percentage != null ? 'Edit Diskon' : 'Beri Diskon' }}
+                <button @click="openAdjustModal(customer)" class="action-btn action-active">
+                  Adjust Poin
                 </button>
               </td>
             </tr>
@@ -130,7 +128,7 @@
               <td colspan="7" class="empty-cell">
                 <div class="empty-icon">👥</div>
                 <p class="empty-text">Belum ada data pelanggan</p>
-                <p class="empty-hint">Data muncul setelah ada transaksi yang memenuhi syarat</p>
+                <p class="empty-hint">Data muncul setelah ada transaksi pertama dari nomor HP customer</p>
               </td>
             </tr>
           </tbody>
@@ -146,9 +144,9 @@
       leave-to-class="modal-leave-to"
     >
       <div
-        v-if="showDiscountModal"
+        v-if="showAdjustModal"
         class="modal-overlay"
-        @click.self="showDiscountModal = false"
+        @click.self="showAdjustModal = false"
       >
         <div class="modal-box">
 
@@ -156,68 +154,56 @@
           <div class="modal-header">
             <div>
               <p class="modal-eyebrow">Program Loyalitas</p>
-              <h3 class="modal-title">Atur Diskon Khusus</h3>
+              <h3 class="modal-title">Adjust Poin</h3>
               <p class="modal-phone">{{ selectedCustomer?.phone }}</p>
             </div>
-            <button class="modal-close" @click="showDiscountModal = false">
+            <button class="modal-close" @click="showAdjustModal = false">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
             </button>
           </div>
 
-          <!-- Diskon aktif saat ini -->
+          <!-- Saldo saat ini -->
           <div class="current-discount">
-            <p class="current-label">Diskon Aktif Saat Ini</p>
+            <p class="current-label">Saldo Poin Saat Ini</p>
             <div class="current-val-wrap">
-              <span
-                class="current-pct"
-                :class="selectedCustomer?.special_discount_percentage != null ? 'current-red' : 'current-green'"
-              >
-                {{ selectedCustomer?.special_discount_percentage != null
-                  ? selectedCustomer.special_discount_percentage + '%'
-                  : defaultDiscount + '%' }}
-              </span>
-              <span class="current-type">
-                {{ selectedCustomer?.special_discount_percentage != null ? 'Diskon Khusus' : 'Default Member' }}
-              </span>
+              <span class="current-pct current-green">{{ selectedCustomer?.points ?? 0 }}</span>
+              <span class="current-type">Poin</span>
             </div>
           </div>
 
-          <!-- Input -->
+          <!-- Input jumlah -->
           <div class="modal-field">
-            <label class="modal-field-label">Diskon Baru (%)</label>
+            <label class="modal-field-label">Jumlah Adjust (+ nambah / - kurangin)</label>
             <input
-              v-model.number="discountInput"
+              v-model.number="adjustAmount"
               type="number"
-              min="0"
-              max="100"
-              placeholder="Contoh: 25"
+              placeholder="Contoh: 10 atau -5"
               class="modal-input"
             />
-            <p class="modal-hint">Kosongkan untuk reset ke default ({{ defaultDiscount }}%)</p>
+            <p class="modal-hint">Saldo baru: {{ (selectedCustomer?.points ?? 0) + (adjustAmount || 0) }} poin</p>
+          </div>
+
+          <!-- Alasan (wajib) -->
+          <div class="modal-field">
+            <label class="modal-field-label">Alasan <span style="color:#dc2626;">*</span></label>
+            <input
+              v-model="adjustNote"
+              type="text"
+              placeholder="Contoh: kompensasi komplain, bonus ulang tahun"
+              class="modal-input"
+            />
           </div>
 
           <!-- Actions -->
           <div class="modal-actions">
-            <button @click="saveSpecialPrice" :disabled="isSaving" class="modal-save-btn">
+            <button @click="saveAdjustPoints" :disabled="isSaving" class="modal-save-btn">
               <span v-if="isSaving" class="btn-spinner"></span>
-              {{ isSaving ? 'Menyimpan...' : 'Simpan Diskon' }}
+              {{ isSaving ? 'Menyimpan...' : 'Simpan Adjustment' }}
             </button>
-            <button @click="showDiscountModal = false" class="modal-cancel-btn">Batal</button>
+            <button @click="showAdjustModal = false" class="modal-cancel-btn">Batal</button>
           </div>
-
-          <!-- Reset -->
-          <button
-            v-if="selectedCustomer?.special_discount_percentage != null"
-            @click="removeSpecialPrice(selectedCustomer); showDiscountModal = false"
-            class="modal-reset-btn"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-            </svg>
-            Cabut diskon khusus → kembali ke {{ defaultDiscount }}%
-          </button>
 
         </div>
       </div>
@@ -238,11 +224,12 @@ const auth    = useAuthStore();
 const loyalty = useLoyaltyStore();
 const router  = useRouter();
 
-const showDiscountModal = ref(false);
+const showAdjustModal = ref(false);
 const selectedCustomer  = ref(null);
-const discountInput     = ref(null);
+const adjustAmount      = ref(null);
+const adjustNote        = ref("");
 const isSaving          = ref(false);
-const defaultDiscount   = ref(0);
+const expiryMonths      = ref(0);
 
 const fetchAdminLoyalData = async () => {
   try {
@@ -250,7 +237,7 @@ const fetchAdminLoyalData = async () => {
     const data = res.data;
     if (data?.customers) {
       loyalty.loyalCustomers = data.customers;
-      defaultDiscount.value  = parseFloat(data.settings?.discount_percentage ?? 0);
+      expiryMonths.value     = data.settings?.points_expiry_months ?? 0;
     } else if (Array.isArray(data)) {
       loyalty.loyalCustomers = data;
     }
@@ -259,40 +246,47 @@ const fetchAdminLoyalData = async () => {
   }
 };
 
-const loyalCount      = computed(() => loyalty.loyalCustomers.filter(c => c.is_loyal).length);
-const discountedCount = computed(() => loyalty.loyalCustomers.filter(c => c.special_discount_percentage != null).length);
+const expiryLabel = computed(() =>
+  expiryMonths.value > 0 ? `${expiryMonths.value} bulan tidak order` : 'tidak pernah hangus (nonaktif)'
+);
+const activePointsCount = computed(() => loyalty.loyalCustomers.filter(c => c.points > 0).length);
+const totalPointsOutstanding = computed(() =>
+  loyalty.loyalCustomers.reduce((sum, c) => sum + (c.points || 0), 0)
+);
 
 const formatPrice = (price) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(price || 0);
 
-const openDiscountModal = (customer) => {
-  selectedCustomer.value  = customer;
-  discountInput.value     = customer.special_discount_percentage ?? null;
-  showDiscountModal.value = true;
+const formatDate = (iso) => {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 };
 
-const saveSpecialPrice = async () => {
-  if (discountInput.value === null || discountInput.value === "") {
-    toast.error("Masukkan persentase diskon"); return;
-  }
+const openAdjustModal = (customer) => {
+  selectedCustomer.value  = customer;
+  adjustAmount.value      = null;
+  adjustNote.value        = "";
+  showAdjustModal.value   = true;
+};
+
+const saveAdjustPoints = async () => {
+  if (!adjustAmount.value) { toast.error("Masukkan jumlah poin (bukan 0)"); return; }
+  if (!adjustNote.value.trim()) { toast.error("Alasan wajib diisi"); return; }
+
   isSaving.value = true;
   try {
-    await apiClient.post(`/orders/give-special-price/${selectedCustomer.value.phone}/`, {
-      discount_percentage: discountInput.value,
+    await apiClient.post(`/orders/adjust-points/${selectedCustomer.value.phone}/`, {
+      amount: adjustAmount.value,
+      note:   adjustNote.value.trim(),
     });
-    toast.success(`Diskon ${discountInput.value}% disimpan untuk ${selectedCustomer.value.phone}`);
-    showDiscountModal.value = false;
+    toast.success(`Poin ${selectedCustomer.value.phone} disesuaikan (${adjustAmount.value > 0 ? '+' : ''}${adjustAmount.value})`);
+    showAdjustModal.value = false;
     fetchAdminLoyalData();
-  } catch { toast.error("Gagal menyimpan diskon"); }
-  finally { isSaving.value = false; }
-};
-
-const removeSpecialPrice = async (customer) => {
-  try {
-    await apiClient.delete(`/orders/give-special-price/${customer.phone}/`);
-    toast.success(`Diskon khusus dicabut, kembali ke ${defaultDiscount.value}%`);
-    fetchAdminLoyalData();
-  } catch { toast.error("Gagal mencabut diskon"); }
+  } catch (err) {
+    toast.error(err?.response?.data?.detail || "Gagal menyimpan adjustment poin");
+  } finally {
+    isSaving.value = false;
+  }
 };
 
 const refreshData = () => fetchAdminLoyalData();
@@ -456,6 +450,8 @@ onMounted(() => {
 .lc-table td { padding: 0.9rem 1.25rem; font-size: 0.83rem; vertical-align: middle; }
 
 .td-phone .phone-val { font-family: monospace; font-weight: 700; color: #fff; letter-spacing: 0.04em; }
+.td-phone { display: flex; flex-direction: column; gap: 0.15rem; }
+.td-phone .phone-name { font-size: 0.68rem; color: rgba(255,255,255,0.4); }
 .td-period { font-size: 0.75rem; color: rgba(255,255,255,0.35); font-family: monospace; }
 .td-center { text-align: center; }
 .td-right  { text-align: right; }

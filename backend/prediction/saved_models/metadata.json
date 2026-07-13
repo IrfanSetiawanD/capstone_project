@@ -1,0 +1,26 @@
+{
+  "trained_at": "2026-07-13T21:29:53.266132",
+  "best_model": "linear_regression",
+  "n_training_days": 109,
+  "feature_columns": [
+    "day_of_week",
+    "is_weekend",
+    "day_of_month",
+    "is_payday_period",
+    "lag_1",
+    "lag_7",
+    "rolling_avg_7"
+  ],
+  "metrics": {
+    "linear_regression": {
+      "mae": 66803.02138592259,
+      "rmse": 88451.39992008821,
+      "mape": 30.61246867108315
+    },
+    "random_forest": {
+      "mae": 94660.55396552566,
+      "rmse": 112672.85710038773,
+      "mape": 30.560623428296346
+    }
+  }
+}

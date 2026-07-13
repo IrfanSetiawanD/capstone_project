@@ -94,18 +94,18 @@
         </div>
 
         <!-- Loyalty status -->
-        <div v-if="customerPhone.length >= 9" class="loyalty-status" :class="isTrackingLoyalty ? 'ls-loading' : isLoyal ? 'ls-loyal' : 'ls-regular'">
+        <div v-if="customerPhone.length >= 9" class="loyalty-status" :class="isTrackingLoyalty ? 'ls-loading' : isMember ? 'ls-loyal' : 'ls-regular'">
           <template v-if="isTrackingLoyalty">
             <div class="ls-spinner"></div>
             <span>Memeriksa status member...</span>
           </template>
-          <template v-else-if="isLoyal">
+          <template v-else-if="isMember">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            <span>Member Loyal — diskon <strong>{{ discountPercent }}%</strong> aktif</span>
+            <span>Member — <strong>{{ memberPoints }} poin</strong>{{ pointsExpiringNote ? ` · ${pointsExpiringNote}` : '' }}</span>
           </template>
           <template v-else>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span>Belum memenuhi syarat member bulan ini</span>
+            <span>Belum pernah order — belum ada poin</span>
           </template>
         </div>
       </div>
@@ -232,10 +232,37 @@
           <span>Subtotal</span>
           <span>{{ formatPrice(subtotal) }}</span>
         </div>
-        <div v-if="isLoyal" class="price-row price-discount">
-          <span>Diskon Member ({{ discountPercent }}%)</span>
-          <span>−{{ formatPrice(discountAmount) }}</span>
+
+        <PromoCodeBox
+          ref="promoBoxRef"
+          :subtotal="subtotal"
+          @applied="onPromoApplied"
+          @removed="onPromoRemoved"
+        />
+
+        <div v-if="appliedPromo" class="price-row price-discount">
+          <span>Diskon Promo ({{ appliedPromo.code }})</span>
+          <span>−{{ formatPrice(appliedPromo.discount_amount) }}</span>
         </div>
+
+        <!-- 🎁 Tukar poin -->
+        <PointRedeemBox
+          v-if="isMember"
+          :points="memberPoints"
+          :affordable="affordableRewards"
+          :locked="lockedRewards"
+          v-model:selected-ids="selectedRewardIds"
+        />
+
+        <div
+          v-for="reward in selectedRewards"
+          :key="`reward-${reward.id}`"
+          class="price-row price-discount"
+        >
+          <span>🎁 {{ reward.menu_name }} (gratis)</span>
+          <span>−{{ reward.point_cost }} poin</span>
+        </div>
+
         <div class="price-total">
           <span>Total Akhir</span>
           <span class="total-val">{{ formatPrice(totalPrice) }}</span>
@@ -365,10 +392,6 @@
             <span>Subtotal</span>
             <span>{{ formatPrice(selectedUnpaidOrder.subtotal) }}</span>
           </div>
-          <div v-if="parseFloat(selectedUnpaidOrder.discount_amount) > 0" class="modal-total-row modal-discount">
-            <span>Diskon</span>
-            <span>−{{ formatPrice(selectedUnpaidOrder.discount_amount) }}</span>
-          </div>
           <div class="modal-total-final">
             <span>Total</span>
             <span>{{ formatPrice(selectedUnpaidOrder.total_price) }}</span>
@@ -448,7 +471,7 @@
     <p style="color:#ccc;margin-bottom:10px;">----------------------------------------</p>
     <div v-if="lastOrder" style="font-size:11px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span>Subtotal</span><span>{{ formatPrice(lastOrder.subtotal || lastOrder.total_price) }}</span></div>
-      <div v-if="parseFloat(lastOrder.discount_amount) > 0" style="display:flex;justify-content:space-between;color:#16a34a;margin-bottom:3px;"><span>Diskon Member</span><span>-{{ formatPrice(lastOrder.discount_amount) }}</span></div>
+      <div v-if="parseFloat(lastOrder.promo_discount_amount) > 0" style="display:flex;justify-content:space-between;color:#16a34a;margin-bottom:3px;"><span>Diskon Promo</span><span>-{{ formatPrice(lastOrder.promo_discount_amount) }}</span></div>
       <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:900;border-top:1px solid #eee;padding-top:4px;margin-bottom:4px;"><span>TOTAL</span><span>{{ formatPrice(lastOrder.total_price) }}</span></div>
       <div v-if="lastOrder.amount_paid > 0" style="display:flex;justify-content:space-between;"><span>Bayar</span><span>{{ formatPrice(lastOrder.amount_paid) }}</span></div>
       <div v-if="lastOrder.change_amount > 0" style="display:flex;justify-content:space-between;color:#16a34a;font-weight:700;"><span>Kembalian</span><span>{{ formatPrice(lastOrder.change_amount) }}</span></div>
@@ -467,6 +490,8 @@ import { menuAPI, orderAPI, apiClient } from "@/api";
 import { toast } from "vue-sonner";
 import { useAuthStore } from '@/stores/auth';
 import html2canvas from 'html2canvas';
+import PromoCodeBox from "@/components/ui/PromoCodeBox.vue";
+import PointRedeemBox from "@/components/ui/PointRedeemBox.vue";
 
 const authStore  = useAuthStore();
 const kasirName  = computed(() => authStore.user?.name || authStore.user?.username || 'Staff');
@@ -480,13 +505,20 @@ const selectedCategory  = ref("Semua");
 const orderItems        = ref([]);
 const customerPhone     = ref("");
 const customerName      = ref("");
-const isLoyal           = ref(false);
-const discountPercent   = ref(0);
+const isMember          = ref(false);
+const memberPoints      = ref(0);
+const pointsExpiringNote = ref(null);
 const paymentMethod     = ref("cash");
 const orderType         = ref("dine_in_now");
 const isSubmitting      = ref(false);
 const isTrackingLoyalty = ref(false);
 let debounceTimeout     = null;
+
+// ── Promo code ──────────────────────────────────────────────────────
+const promoBoxRef  = ref(null);
+const appliedPromo = ref(null); // { promo_id, code, discount_amount }
+const onPromoApplied = (promo) => { appliedPromo.value = promo; };
+const onPromoRemoved = () => { appliedPromo.value = null; };
 
 const unpaidOrders          = ref([]);
 const showUnpaidDrawer      = ref(false);
@@ -498,8 +530,11 @@ const isPaying              = ref(false);
 const amountPaidModal       = ref(0);
 const amountPaid            = ref(0);
 const receiptRef            = ref(null);
-const lastOrder             = ref(null);
+const lastOrder              = ref(null);
 const lastOrderItems        = ref([]);
+const affordableRewards = ref([]);
+const lockedRewards     = ref([]);
+const selectedRewardIds = ref([]);
 
 const changeDue = computed(() => {
   if (paymentMethod.value !== 'cash' || orderType.value !== 'dine_in_now') return 0;
@@ -522,9 +557,13 @@ const filteredMenus = computed(() => {
     })
     .sort((a, b) => b.is_available - a.is_available);
 });
+
+// ── Kalkulasi harga: subtotal → diskon promo → total (diskon member % udah dihapus) ──
 const subtotal       = computed(() => orderItems.value.reduce((acc, item) => acc + item.price * item.quantity, 0));
-const discountAmount = computed(() => isLoyal.value ? (subtotal.value * discountPercent.value) / 100 : 0);
-const totalPrice     = computed(() => subtotal.value - discountAmount.value);
+const totalPrice     = computed(() => {
+  const promoDiscount = appliedPromo.value?.discount_amount || 0;
+  return Math.max(subtotal.value - promoDiscount, 0);
+});
 
 const filteredUnpaidOrders = computed(() => {
   const q = unpaidSearch.value.toLowerCase().trim();
@@ -552,7 +591,11 @@ const fetchUnpaidOrders = async () => {
 
 const debounceTrackLoyalty = () => {
   clearTimeout(debounceTimeout);
-  if (customerPhone.value.length < 9) { isLoyal.value = false; discountPercent.value = 0; return; }
+  if (customerPhone.value.length < 9) {
+    isMember.value = false; memberPoints.value = 0; pointsExpiringNote.value = null;
+    resetPointRewards();
+    return;
+  }
   isTrackingLoyalty.value = true;
   debounceTimeout = setTimeout(checkLoyalty, 800);
 };
@@ -560,9 +603,36 @@ const debounceTrackLoyalty = () => {
 const checkLoyalty = async () => {
   try {
     const { data } = await apiClient.get("/orders/check_loyalty_status/", { params: { phone: customerPhone.value } });
-    isLoyal.value = data.is_loyal; discountPercent.value = data.discount_percent || 0;
-  } catch { isLoyal.value = false; discountPercent.value = 0; }
-  finally { isTrackingLoyalty.value = false; }
+    isMember.value = data.is_member ?? false;
+    memberPoints.value = data.points ?? 0;
+    pointsExpiringNote.value = data.points_expiring_note ?? null;
+  } catch {
+    isMember.value = false; memberPoints.value = 0; pointsExpiringNote.value = null;
+  } finally {
+    isTrackingLoyalty.value = false;
+  }
+  // narik reward yang bisa ditukar, terpisah biar loyalty status gak nge-block kalo ini gagal
+  fetchPointRewards(customerPhone.value);
+};
+
+const selectedRewards = computed(() =>
+  affordableRewards.value.filter(r => selectedRewardIds.value.includes(r.id))
+);
+
+const resetPointRewards = () => {
+  affordableRewards.value = [];
+  lockedRewards.value = [];
+  selectedRewardIds.value = [];
+};
+
+const fetchPointRewards = async (phoneNumber) => {
+  try {
+    const { data } = await orderAPI.getAvailablePointRewards(phoneNumber);
+    affordableRewards.value = data.affordable ?? [];
+    lockedRewards.value     = data.locked ?? [];
+  } catch {
+    resetPointRewards();
+  }
 };
 
 const addToOrder = (menu) => {
@@ -636,22 +706,27 @@ const submitOrder = async () => {
   if (orderItems.value.length === 0) return toast.error("Keranjang kosong!");
   isSubmitting.value = true;
   const payload = {
-    source: 'pos',
-    customer: customerPhone.value ? { phone: customerPhone.value, name: customerName.value || "Member Baru" } : null,
-    payment_method: paymentMethod.value,
-    payment_status: orderType.value === 'dine_in_later' ? 'pending' : 'paid',
-    status: 'pending',
-    amount_paid: paymentMethod.value === 'cash' ? amountPaid.value : 0,
-    kasir_name: kasirName.value,
-    items: orderItems.value.map(item => ({ menu_id: item.id, quantity: item.quantity, price: item.price, notes: item.notes })),
-  };
+  source: 'pos',
+  customer: customerPhone.value ? { phone: customerPhone.value, name: customerName.value || "Member Baru" } : null,
+  payment_method: paymentMethod.value,
+  payment_status: orderType.value === 'dine_in_later' ? 'pending' : 'paid',
+  status: 'pending',
+  amount_paid: paymentMethod.value === 'cash' ? amountPaid.value : 0,
+  kasir_name: kasirName.value,
+  promo_id: appliedPromo.value?.promo_id || null,
+  promo_discount_amount: appliedPromo.value?.discount_amount || 0,
+  redeem_reward_ids: selectedRewardIds.value,
+  items: orderItems.value.map(item => ({ menu_id: item.id, quantity: item.quantity, price: item.price, notes: item.notes })),
+};
   try {
     const res = await apiClient.post("/orders/", payload);
     lastOrder.value = res.data; lastOrderItems.value = [...orderItems.value];
     toast.success("Pesanan berhasil masuk ke sistem!");
     orderItems.value = []; customerPhone.value = ""; customerName.value = "";
-    isLoyal.value = false; discountPercent.value = 0;
+    isMember.value = false; memberPoints.value = 0; pointsExpiringNote.value = null;
     paymentMethod.value = "cash"; orderType.value = "dine_in_now"; amountPaid.value = 0;
+    promoBoxRef.value?.removePromo();
+    resetPointRewards();
     fetchUnpaidOrders();
     await shareReceiptAsImage(res.data);
   } catch (e) { console.error(e); toast.error("Gagal menyimpan transaksi ke server."); }
@@ -941,7 +1016,7 @@ onMounted(() => { fetchMenus(); fetchUnpaidOrders(); });
 /* Price summary */
 .price-summary {
   padding: 1rem 1.4rem;
-  display: flex; flex-direction: column; gap: 0.45rem;
+  display: flex; flex-direction: column; gap: 0.6rem;
   border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 .price-row {

@@ -13,14 +13,18 @@ from datetime import timedelta
 # Finance app
 from finance.models import Expense
 
+# Promo — dipakai buat validasi & kunci kuota server-side saat create_order
+from promotions.models import Promo
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Order, OrderItem, CustomerLoyalty, LoyaltySettings, PAYMENT_METHOD_CHOICES, StoreSettings
+from .models import Order, OrderItem, OrderPayment, CustomerLoyalty, LoyaltySettings, PAYMENT_METHOD_CHOICES, CANCEL_REASON_CHOICES, StoreSettings, PointReward, PointAdjustment
 from menu.models import Menu
-from .serializers import OrderSerializer, LoyaltySettingsSerializer, StoreSettingsSerializer
+from .serializers import OrderSerializer, LoyaltySettingsSerializer, StoreSettingsSerializer, PointRewardSerializer
+from rest_framework import viewsets
 
 
 # ─────────────────────────────────────────────
@@ -48,6 +52,12 @@ def create_order(request):
 
     amount_paid = Decimal(str(data.get('amount_paid', 0) or 0))
     kasir_name  = data.get('kasir_name', '').strip()
+
+    promo_id = data.get('promo_id')
+
+    # Poin yang mau ditukar (list of PointReward id, bisa ada duplikat kalau
+    # customer nuker reward yang sama lebih dari 1x)
+    redeem_reward_ids = data.get('redeem_reward_ids') or []
 
     raw_payment_status = data.get('payment_status', '')
 
@@ -98,7 +108,83 @@ def create_order(request):
             "notes": item_data.get('notes', ''),
         })
 
-    # Buat order setelah semua item tervalidasi
+    # ── Tukar poin loyalty → menu gratis (kalau ada) ─────────────────────────
+    # select_for_update() dipakai biar dua order dari nomor HP yang sama & poin
+    # mepet ngga bisa berdua-duaan lolos validasi poin di saat bersamaan (race
+    # condition), sama seperti kuota promo di bawah.
+    loyalty_for_redeem = None
+    reward_points_to_deduct = 0
+    if redeem_reward_ids:
+        if not phone:
+            return Response({"error": "Nomor WhatsApp wajib diisi untuk menukar poin"}, status=400)
+
+        loyalty_for_redeem = CustomerLoyalty.objects.select_for_update().filter(phone=phone).first()
+        if not loyalty_for_redeem:
+            return Response({"error": "Belum ada poin loyalty untuk nomor ini"}, status=400)
+
+        rewards_qs = PointReward.objects.select_related('menu').filter(
+            id__in=set(redeem_reward_ids), is_active=True,
+        )
+        rewards_by_id = {r.id: r for r in rewards_qs}
+
+        missing = [rid for rid in redeem_reward_ids if rid not in rewards_by_id]
+        if missing:
+            return Response({"error": f"Reward tidak ditemukan/tidak aktif: {missing}"}, status=400)
+
+        reward_points_to_deduct = sum(rewards_by_id[rid].point_cost for rid in redeem_reward_ids)
+        if reward_points_to_deduct > loyalty_for_redeem.points:
+            return Response({
+                "error": f"Poin tidak cukup. Butuh {reward_points_to_deduct} poin, kamu punya {loyalty_for_redeem.points} poin",
+            }, status=400)
+
+        for rid in redeem_reward_ids:
+            reward   = rewards_by_id[rid]
+            menu_obj = reward.menu
+            if not menu_obj.is_available:
+                return Response(
+                    {"error": f"Menu reward '{menu_obj.name}' sedang tidak tersedia"},
+                    status=400,
+                )
+            processed_items.append({
+                "menu":  menu_obj,
+                "qty":   1,
+                "price": 0,
+                "notes": "Reward poin",
+                "is_point_redemption": True,
+            })
+
+    # Subtotal dihitung dulu dari item² tervalidasi, dipakai buat validasi promo
+    computed_subtotal = sum(
+        (Decimal(str(item["price"])) * item["qty"] for item in processed_items),
+        Decimal('0'),
+    )
+
+    # ── Validasi & kunci promo (kalau dikirim) ───────────────────────────────
+    # PENTING: discount_amount SELALU dihitung ulang di server lewat
+    # promo.calculate_discount(), jangan percaya angka promo_discount_amount
+    # yang dikirim dari frontend (bisa dimanipulasi). select_for_update() dipakai
+    # supaya dua order dengan kode promo yang sama & kuota mepet ngga bisa
+    # sama-sama lolos validasi kuota di saat bersamaan (race condition).
+    promo_obj      = None
+    promo_discount = Decimal('0')
+    if promo_id:
+        promo_obj = Promo.objects.select_for_update().filter(id=promo_id).first()
+        if not promo_obj:
+            return Response({"error": "Promo tidak ditemukan"}, status=400)
+
+        is_valid, message = promo_obj.check_valid(computed_subtotal)
+        if not is_valid:
+            return Response({"error": f"Promo tidak valid: {message}"}, status=400)
+
+        promo_discount = Decimal(str(promo_obj.calculate_discount(computed_subtotal)))
+
+    # Diskon tier loyalty otomatis SUDAH DIHAPUS — satu-satunya jalur reward
+    # customer sekarang cuma poin (tukar menu gratis lewat is_point_redemption).
+    # Yang motong harga di sini cuma promo, sama seperti sebelumnya.
+    computed_total_price = computed_subtotal - promo_discount
+    computed_total_price = computed_total_price if computed_total_price > 0 else Decimal('0')
+
+    # Buat order setelah semua item & promo tervalidasi/terhitung
     order = Order.objects.create(
         source=source,
         status=order_status,
@@ -111,6 +197,10 @@ def create_order(request):
         notes=notes,
         amount_paid=amount_paid,
         kasir_name=kasir_name,
+        promo=promo_obj,
+        promo_discount_amount=promo_discount,
+        subtotal=computed_subtotal,
+        total_price=computed_total_price,
     )
 
     OrderItem.objects.bulk_create([
@@ -120,13 +210,27 @@ def create_order(request):
             quantity = item["qty"],
             price    = item["price"],
             notes    = item["notes"],
+            is_point_redemption = item.get("is_point_redemption", False),
         )
         for item in processed_items
     ])
 
-    order.recalculate_totals()
-    if phone:
-        order.apply_loyalty_discount()
+    # Catatan: TIDAK perlu panggil order.recalculate_totals() lagi di sini —
+    # subtotal & total_price sudah final & konsisten dengan processed_items
+    # sejak baris Order.objects.create() di atas.
+
+    # Kunci pemakaian kuota promo — HANYA setelah order beneran berhasil dibuat.
+    # F() dipakai biar increment-nya atomic di level database, ngga rawan
+    # race condition dibanding baca-lalu-tulis manual.
+    if promo_obj:
+        promo_obj.used_count = models.F('used_count') + 1
+        promo_obj.save(update_fields=['used_count'])
+
+    # Potong poin — HANYA setelah order beneran berhasil dibuat, sama seperti
+    # kuota promo di atas. F() dipakai biar pengurangannya atomic di level DB.
+    if loyalty_for_redeem and reward_points_to_deduct:
+        loyalty_for_redeem.points = models.F('points') - reward_points_to_deduct
+        loyalty_for_redeem.save(update_fields=['points'])
 
     order.refresh_from_db()
 
@@ -142,7 +246,7 @@ def create_order(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def list_orders(request):
     orders = (
         Order.objects
@@ -153,7 +257,7 @@ def list_orders(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def get_order(request, pk):
     order = get_object_or_404(
         Order.objects.prefetch_related("items__menu"),
@@ -163,7 +267,7 @@ def get_order(request, pk):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def active_orders_per_day(request):
     target_date = request.query_params.get("target_date")
     if not target_date:
@@ -188,89 +292,102 @@ def check_loyalty_status(request):
     """
     GET /api/orders/check_loyalty_status/?phone=08xxx
 
-    Response:
-      - is_loyal          → dipakai semua Vue component
-      - discount_percent  → dipakai Cart.vue (POS) & Checkout.vue (web)
-      - discount_percentage → alias, nilai sama
+    Response (poin, BUKAN diskon lagi):
+      - is_member       → True kalau nomor ini udah pernah tercatat di CustomerLoyalty
+      - points          → saldo poin aktif saat ini (udah lewat cek hangus)
+      - points_expiring_note → pesan kalau poin baru aja hangus atau kapan estimasi hangusnya
     """
     phone = request.query_params.get("phone", "").strip()
     if not phone:
-        return Response({
-            "is_loyal":            False,
-            "discount_percent":    0,
-            "discount_percentage": 0,
-        })
+        return Response({"is_member": False, "points": 0, "points_expiring_note": None})
 
-    # Cek override manual dari admin
-    loyalty_override = CustomerLoyalty.objects.filter(
-        phone=phone,
-        special_discount_percentage__isnull=False,
-    ).first()
+    loyalty = CustomerLoyalty.objects.filter(phone=phone).first()
+    if not loyalty:
+        return Response({"is_member": False, "points": 0, "points_expiring_note": None})
 
-    if loyalty_override:
-        pct = float(loyalty_override.special_discount_percentage)
-        return Response({
-            "is_loyal":            True,
-            "discount_percent":    pct,
-            "discount_percentage": pct,
-        })
+    # Cek hangus SEBELUM ditampilkan, biar customer selalu liat saldo yang akurat
+    # real-time — bukan cuma pas order baru selesai.
+    just_expired = loyalty.check_and_expire_points()
 
-    # Hitung berdasarkan aturan umum
-    settings = LoyaltySettings.get_settings()
-    cutoff   = timezone.now() - timedelta(days=settings.period_days)
-    stats    = Order.objects.filter(
-        customer_phone=phone,
-        status='completed',
-        created_at__gte=cutoff,
-    ).aggregate(jumlah=Count('id'), total=Sum('total_price'))
+    note = None
+    if just_expired:
+        note = (
+            f"Poin hangus karena tidak ada pesanan selama "
+            f"{loyalty.expiry_months_setting()} bulan (order terakhir "
+            f"{loyalty.last_order_at:%d %b %Y})" if loyalty.last_order_at else "Poin hangus otomatis"
+        )
+    else:
+        expiry_date = loyalty.expiry_estimate_date()
+        if expiry_date:
+            note = f"Poin akan hangus sekitar {expiry_date:%d %b %Y} kalau tidak ada pesanan lagi"
 
-    is_loyal = (
-        (stats['jumlah'] or 0) >= settings.min_orders
-        and (stats['total'] or Decimal('0')) >= settings.min_spending
-    )
-
-    pct = float(settings.discount_percentage) if is_loyal else 0
     return Response({
-        "is_loyal":            is_loyal,
-        "discount_percent":    pct,
-        "discount_percentage": pct,
+        "is_member":            True,
+        "points":               loyalty.points,
+        "points_expiring_note": note,
     })
 
 
+# ─────────────────────────────────────────────
+# POINT REWARDS — PUBLIK (cek saldo + rekomendasi tukar)
+# ─────────────────────────────────────────────
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
-def loyal_customers(request):
-    settings = LoyaltySettings.get_settings()
-    cutoff   = timezone.now() - timedelta(days=settings.period_days)
+def available_point_rewards(request):
+    """
+    GET /api/orders/point-rewards/available/?phone=08xxx
 
-    aggregated = (
-        Order.objects
-        .filter(status='completed', created_at__gte=cutoff)
-        .exclude(customer_phone='')
-        .values('customer_phone')
-        .annotate(
-            order_count = Count('id'),
-            total_spent = Sum('total_price'),
-            last_name   = Max('customer_name'),
-        )
-        .order_by('-total_spent')
-    )
+    Response:
+      - points: saldo poin customer saat ini (0 kalau belum punya akun loyalty)
+      - affordable: reward yang poinnya udah cukup buat ditukar sekarang,
+        diurutkan dari yang paling MAHAL dulu (biar customer liat reward
+        paling worth-it dari poinnya, bukan yang termurah/paling gampang).
+      - locked: HANYA reward yang paling DEKAT ke saldo poin customer
+        (missing_points paling kecil), dibatasi max 5 — bukan seluruh
+        katalog. Ini biar rekomendasinya kerasa relevan/achievable ("dikit
+        lagi!"), bukan nge-dump semua menu yang masih jauh dari jangkauan.
+    """
+    phone = request.query_params.get("phone", "").strip()
+    points = 0
+    if phone:
+        loyalty = CustomerLoyalty.objects.filter(phone=phone).first()
+        points = loyalty.points if loyalty else 0
 
-    data = []
-    for row in aggregated:
-        is_loyal = (
-            row['order_count'] >= settings.min_orders
-            and row['total_spent'] >= settings.min_spending
-        )
-        data.append({
-            "phone":       row['customer_phone'],
-            "name":        row['last_name'] or '',
-            "order_count": row['order_count'],
-            "total_spent": row['total_spent'],
-            "is_loyal":    is_loyal,
-        })
+    rewards = PointReward.objects.filter(is_active=True).select_related('menu')
 
-    return Response(data)
+    affordable, locked = [], []
+    for reward in rewards:
+        data = PointRewardSerializer(reward).data
+        if reward.point_cost <= points:
+            affordable.append((reward.point_cost, data))
+        else:
+            data["missing_points"] = reward.point_cost - points
+            locked.append((reward.point_cost - points, data))
+
+    # Affordable: yang paling mahal (paling "untung" buat ditukar) duluan.
+    affordable.sort(key=lambda pair: pair[0], reverse=True)
+    # Locked: yang paling DEKAT (missing_points paling kecil) duluan,
+    # dibatasi 5 biar rekomendasinya fokus & achievable.
+    locked.sort(key=lambda pair: pair[0])
+
+    LOCKED_RECOMMENDATION_LIMIT = 5
+
+    return Response({
+        "points": points,
+        "affordable": [data for _, data in affordable],
+        "locked": [data for _, data in locked[:LOCKED_RECOMMENDATION_LIMIT]],
+    })
+
+
+# ─────────────────────────────────────────────
+# POINT REWARDS — ADMIN CRUD
+# ─────────────────────────────────────────────
+
+class PointRewardViewSet(viewsets.ModelViewSet):
+    queryset = PointReward.objects.select_related('menu').all()
+    serializer_class = PointRewardSerializer
+    permission_classes = [IsAdminUser]
 
 
 # ─────────────────────────────────────────────
@@ -278,7 +395,7 @@ def loyal_customers(request):
 # ─────────────────────────────────────────────
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def order_reports(request):
     month = request.query_params.get("month")
     year  = request.query_params.get("year")
@@ -304,7 +421,7 @@ def order_reports(request):
 
 
 class DashboardStatsView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
         date_from = request.query_params.get('date_from')
@@ -357,21 +474,9 @@ class DashboardStatsView(APIView):
             .order_by("-total_qty")[:5]
         )
 
-        # Loyal users — selalu berdasarkan period_days, tidak ikut filter tanggal
-        settings_obj = LoyaltySettings.get_settings()
-        cutoff       = timezone.now() - timedelta(days=settings_obj.period_days)
-        loyal_count  = (
-            Order.objects
-            .filter(status='completed', created_at__gte=cutoff)
-            .exclude(customer_phone='')
-            .values('customer_phone')
-            .annotate(jumlah=Count('id'), total=Sum('total_price'))
-            .filter(
-                jumlah__gte=settings_obj.min_orders,
-                total__gte=settings_obj.min_spending,
-            )
-            .count()
-        )
+        # Member loyal sekarang cuma soal "punya poin aktif atau enggak",
+        # gak ada lagi hitungan tier min_orders/min_spending.
+        loyal_count = CustomerLoyalty.objects.filter(points__gt=0).count()
 
         return Response({
             "total_revenue":    paid_stats["total_revenue"] or 0,
@@ -391,7 +496,7 @@ class DashboardStatsView(APIView):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def admin_dashboard_daily_stats(request):
     target_date = request.query_params.get("target_date")
 
@@ -418,7 +523,7 @@ def admin_dashboard_daily_stats(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def finance_monthly_summary(request):
     from django.db.models.functions import TruncMonth, ExtractMonth
 
@@ -460,7 +565,7 @@ def finance_monthly_summary(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def finance_daily_summary(request):
     """
     GET /api/orders/finance/daily/?year=2026&month=6
@@ -516,7 +621,7 @@ def finance_daily_summary(request):
 # ─────────────────────────────────────────────
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def export_excel_report(request):
     """
     GET /api/orders/export/finance-excel/?mode=monthly&month=7&year=2026
@@ -527,7 +632,7 @@ def export_excel_report(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def export_pdf_report(request):
     """
     GET /api/orders/export/finance-pdf/?mode=monthly&month=7&year=2026
@@ -556,46 +661,29 @@ class LoyaltySettingsView(APIView):
 
 
 class LoyalCustomersView(APIView):
+    """
+    Sekarang sumber datanya langsung dari CustomerLoyalty (bukan agregasi
+    Order lagi) — karena points/total_spent/total_orders/last_order_at
+    semua udah kesimpen di sana secara real-time lewat signal tiap order
+    completed. Ngga ada lagi konsep "LOYAL MEMBER vs REGULAR" berdasarkan
+    tier — semua customer yang punya poin ya ditampilin apa adanya.
+    """
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        settings = LoyaltySettings.get_settings()
-        cutoff   = timezone.now() - timedelta(days=settings.period_days)
-
-        aggregated = (
-            Order.objects
-            .filter(status='completed', created_at__gte=cutoff)
-            .exclude(customer_phone='')
-            .values('customer_phone')
-            .annotate(
-                order_count   = Count('id'),
-                total_belanja = Sum('total_price'),
-                nama_terakhir = Max('customer_name'),
-            )
-            .order_by('-total_belanja')
-        )
-
-        overrides = {
-            cl.phone: cl.special_discount_percentage
-            for cl in CustomerLoyalty.objects.exclude(
-                special_discount_percentage__isnull=True
-            )
-        }
-
+        settings  = LoyaltySettings.get_settings()
         customers = []
-        for row in aggregated:
-            is_loyal = (
-                row['order_count'] >= settings.min_orders
-                and row['total_belanja'] >= settings.min_spending
-            )
+
+        for cl in CustomerLoyalty.objects.all().order_by('-points'):
             customers.append({
-                "phone":                       row['customer_phone'],
-                "name":                        row['nama_terakhir'] or '',
-                "order_count":                 row['order_count'],
-                "total_spent":                 row['total_belanja'],
-                "status":                      'LOYAL MEMBER' if is_loyal else 'REGULAR',
-                "is_loyal":                    is_loyal,
-                "special_discount_percentage": overrides.get(row['customer_phone']),
+                "phone":            cl.phone,
+                "name":             cl.name,
+                "points":           cl.points,
+                "total_orders":     cl.total_orders,
+                "total_spent":      cl.total_spent,
+                "last_order_at":    cl.last_order_at,
+                "expiry_estimate":  cl.expiry_estimate_date(),
+                "points_expired":   cl.points_expired(),
             })
 
         return Response({
@@ -604,31 +692,55 @@ class LoyalCustomersView(APIView):
         })
 
 
-class GiveSpecialPriceView(APIView):
+class AdjustPointsView(APIView):
+    """
+    Pengganti GiveSpecialPriceView lama. Dulu admin kasih "diskon spesial %"
+    per customer — sekarang diganti adjust poin manual (nambah/mengurangi),
+    dengan alasan wajib diisi & tercatat sebagai PointAdjustment (audit log),
+    bukan cuma angka yang berubah tanpa jejak.
+    """
     permission_classes = [IsAdminUser]
 
     def post(self, request, phone):
-        discount = request.data.get('discount_percentage')
-        if discount is None:
-            return Response({'detail': 'discount_percentage wajib diisi'}, status=400)
+        amount = request.data.get('amount')
+        note   = (request.data.get('note') or '').strip()
+
+        if amount is None:
+            return Response({'detail': 'amount wajib diisi'}, status=400)
+        try:
+            amount = int(amount)
+        except (TypeError, ValueError):
+            return Response({'detail': 'amount harus berupa angka bulat'}, status=400)
+        if amount == 0:
+            return Response({'detail': 'amount tidak boleh 0'}, status=400)
+        if not note:
+            return Response({'detail': 'Alasan (note) wajib diisi buat jejak audit'}, status=400)
 
         loyalty, _ = CustomerLoyalty.objects.get_or_create(
             phone=phone,
             defaults={'name': request.data.get('name', '')},
         )
-        loyalty.special_discount_percentage = Decimal(str(discount))
-        loyalty.save(update_fields=['special_discount_percentage', 'updated_at'])
+
+        new_balance = loyalty.points + amount
+        if new_balance < 0:
+            return Response(
+                {'detail': f'Saldo poin cuma {loyalty.points}, gak bisa dikurangin {abs(amount)}'},
+                status=400,
+            )
+
+        loyalty.points = new_balance
+        loyalty.save(update_fields=['points'])
+
+        admin_name = getattr(request.user, 'username', '') or 'admin'
+        PointAdjustment.objects.create(
+            customer=loyalty, amount=amount, reason='manual',
+            note=note, admin_name=admin_name,
+        )
 
         return Response({
-            'phone':                       phone,
-            'special_discount_percentage': float(loyalty.special_discount_percentage),
+            'phone':  phone,
+            'points': loyalty.points,
         })
-
-    def delete(self, request, phone):
-        CustomerLoyalty.objects.filter(phone=phone).update(
-            special_discount_percentage=None
-        )
-        return Response(status=204)
 
 
 # ─────────────────────────────────────────────
@@ -636,13 +748,14 @@ class GiveSpecialPriceView(APIView):
 # ─────────────────────────────────────────────
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def unpaid_orders(request):
     search = request.query_params.get("search", "")
 
     qs = (
         Order.objects
         .filter(payment_status__in=["unpaid", "pending"])
+        .exclude(status="cancelled")
         .prefetch_related("items__menu")
     )
 
@@ -659,24 +772,84 @@ def unpaid_orders(request):
 
 
 @api_view(["PATCH"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def pay_order(request, pk):
+    """
+    Melunasi order. Mendukung 2 format request:
+
+    1. FORMAT BARU (split bill / multi-payment) — kirim list `payments`:
+       { "payments": [{"method": "cash", "amount": 5000}, {"method": "qris_manual", "amount": 8000}],
+         "kasir_name": "Budi" }
+       Dipakai kalau bayarnya dicampur beberapa metode, atau dibagi
+       beberapa orang (tiap orang jadi satu baris payments).
+
+    2. FORMAT LAMA (satu metode, satu jumlah) — tetap didukung biar
+       kompatibel sama caller lain yang belum diupdate:
+       { "payment_method": "cash", "amount_paid": 20000, "kasir_name": "Budi" }
+    """
     order = get_object_or_404(Order, pk=pk)
     previous_status = order.status
 
-    amount_paid = Decimal(str(request.data.get('amount_paid', 0) or 0))
-    kasir_name  = request.data.get('kasir_name', '').strip()
+    kasir_name    = (request.data.get('kasir_name') or '').strip()
+    payments_data = request.data.get('payments')
+
+    if payments_data:
+        # ── Format baru: banyak baris pembayaran ──
+        parsed_rows = []
+        for row in payments_data:
+            method = (row.get('method') or '').strip()
+            try:
+                amount = Decimal(str(row.get('amount', 0) or 0))
+            except Exception:
+                return Response({"detail": "Nominal pembayaran tidak valid."}, status=400)
+
+            valid_methods = {choice[0] for choice in PAYMENT_METHOD_CHOICES if choice[0] != 'mixed'}
+            if method not in valid_methods:
+                return Response({"detail": f"Metode pembayaran '{method}' tidak valid."}, status=400)
+            if amount <= 0:
+                return Response({"detail": "Nominal tiap baris pembayaran harus lebih dari 0."}, status=400)
+
+            parsed_rows.append((method, amount))
+
+        if not parsed_rows:
+            return Response({"detail": "Minimal harus ada satu baris pembayaran."}, status=400)
+
+        total_paid = sum(amount for _, amount in parsed_rows)
+        if total_paid < order.total_price:
+            return Response(
+                {"detail": "Total pembayaran belum menutupi tagihan."},
+                status=400,
+            )
+
+        # Hapus baris pembayaran lama kalau ini pengulangan (mis. retry), biar gak dobel.
+        order.payments.all().delete()
+        for method, amount in parsed_rows:
+            OrderPayment.objects.create(order=order, method=method, amount=amount)
+
+        distinct_methods = {method for method, _ in parsed_rows}
+        order.payment_method = "mixed" if len(distinct_methods) > 1 else next(iter(distinct_methods))
+        order.amount_paid     = total_paid
+        order.change_amount   = max(total_paid - order.total_price, Decimal('0'))
+
+    else:
+        # ── Format lama: satu metode, satu jumlah ──
+        amount_paid = Decimal(str(request.data.get('amount_paid', 0) or 0))
+        method = request.data.get("payment_method") or order.payment_method or "cash"
+
+        order.payments.all().delete()
+        OrderPayment.objects.create(
+            order=order, method=method,
+            amount=amount_paid if amount_paid > 0 else order.total_price,
+        )
+
+        order.payment_method = method
+        order.amount_paid     = amount_paid
+        if amount_paid > 0:
+            order.change_amount = max(amount_paid - order.total_price, Decimal('0'))
 
     order.payment_status = "paid"
     order.status         = "completed"
-    order.payment_method = (
-        request.data.get("payment_method") or order.payment_method or "cash"
-    )
     order.kasir_name     = kasir_name or order.kasir_name
-    order.amount_paid    = amount_paid
-
-    if amount_paid > 0:
-        order.change_amount = max(amount_paid - order.total_price, Decimal('0'))
 
     order._previous_status = previous_status
     order.save()
@@ -687,11 +860,116 @@ def pay_order(request, pk):
         "order_number":  order.order_number,
         "change_amount": float(order.change_amount),
         "amount_paid":   float(order.amount_paid),
+        "payment_method": order.payment_method,
+    })
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAdminUser])
+def cancel_order(request, pk):
+    """
+    Void/batalkan order dengan alasan wajib — dipakai kalau order salah
+    input, pelanggan batal, dsb. Order TIDAK dihapus dari database, cuma
+    diubah statusnya jadi 'cancelled' + dicatat alasannya, biar tetap ada
+    jejak buat audit/laporan (gak ada transaksi yang tiba-tiba hilang).
+    """
+    order = get_object_or_404(Order, pk=pk)
+    previous_status = order.status
+
+    if order.status == "completed":
+        return Response(
+            {"detail": "Order yang sudah selesai (completed) tidak bisa dibatalkan lewat sini."},
+            status=400,
+        )
+    if order.status == "cancelled":
+        return Response(
+            {"detail": "Order ini sudah dibatalkan sebelumnya."},
+            status=400,
+        )
+
+    reason = (request.data.get("cancel_reason") or "").strip()
+    valid_reasons = {choice[0] for choice in CANCEL_REASON_CHOICES}
+    if reason not in valid_reasons:
+        return Response(
+            {"detail": "Alasan pembatalan wajib diisi dan harus valid."},
+            status=400,
+        )
+
+    note       = (request.data.get("cancel_note") or "").strip()
+    kasir_name = (request.data.get("kasir_name") or "").strip()
+
+    order.status         = "cancelled"
+    order.payment_status = "void"
+    order.cancel_reason  = reason
+    order.cancel_note    = note
+    order.cancelled_at   = timezone.now()
+    order.cancelled_by   = kasir_name
+
+    order._previous_status = previous_status
+    order.save()
+    order.refresh_from_db()
+
+    return Response({
+        "success":      True,
+        "order_number": order.order_number,
+        "status":       order.status,
+        "cancel_reason": order.cancel_reason,
     })
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
+def new_order_notifications(request):
+    """
+    GET /api/orders/notifications/?after_id=123
+
+    Polling ringan (bukan full order list) buat deteksi order BARU masuk
+    sejak id terakhir yang udah diketahui frontend. Dipakai admin dashboard
+    buat munculin toast + suara notifikasi tanpa nge-refetch semua data
+    order tiap beberapa detik.
+
+    - Order dari POS (source='pos') di-exclude, karena itu diinput admin
+      sendiri di tempat — gak perlu notif ke diri sendiri.
+    - Kalau `after_id` gak dikirim (pemanggilan pertama kali pas dashboard
+      dibuka), balikin new_orders kosong — cuma ngasih tau `latest_id`
+      sebagai starting point. Ini penting biar order-order lama yang udah
+      ada dari sebelumnya gak ikut ke-notif ulang tiap kali admin refresh
+      halaman/pindah tab.
+    """
+    latest_id = Order.objects.order_by('-id').values_list('id', flat=True).first() or 0
+
+    after_id_raw = request.query_params.get("after_id")
+    if after_id_raw is None:
+        return Response({'new_orders': [], 'latest_id': latest_id})
+
+    try:
+        after_id = int(after_id_raw)
+    except (TypeError, ValueError):
+        return Response({'new_orders': [], 'latest_id': latest_id})
+
+    new_orders_qs = (
+        Order.objects
+        .filter(id__gt=after_id)
+        .exclude(source='pos')
+        .order_by('id')[:20]
+    )
+
+    data = [
+        {
+            'id':             o.id,
+            'order_number':   o.order_number,
+            'customer_name':  o.customer_name or 'Pelanggan',
+            'total_price':    o.total_price,
+            'source':         o.source,
+            'created_at':     o.created_at,
+        }
+        for o in new_orders_qs
+    ]
+    return Response({'new_orders': data, 'latest_id': latest_id})
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
 def order_history(request):
     """
     GET /api/orders/history/?period=today|week|month
@@ -726,7 +1004,7 @@ def order_history(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAdminUser])
 def order_full_report(request):
     from django.db.models.functions import ExtractHour, TruncDate, TruncMonth
 
@@ -920,26 +1198,14 @@ def order_full_report(request):
         else:
             pelanggan_baru += 1
 
-    settings_obj    = LoyaltySettings.get_settings()
-    loyal_overrides = set(
-        CustomerLoyalty.objects.exclude(special_discount_percentage__isnull=True)
-        .values_list("phone", flat=True)
-    )
-    per_phone_stats = (
-        qualifying_qs.exclude(customer_phone="")
-        .values("customer_phone")
-        .annotate(jumlah=Count("id"), total=Sum("total_price"))
-    )
-    member_loyal = 0
-    for row in per_phone_stats:
-        if row["customer_phone"] in loyal_overrides:
-            member_loyal += 1
-            continue
-        if (
-            row["jumlah"] >= settings_obj.min_orders
-            and (row["total"] or Decimal("0")) >= settings_obj.min_spending
-        ):
-            member_loyal += 1
+    # Member loyal sekarang = customer yang punya poin aktif (bukan tier
+    # min_orders/min_spending atau override diskon manual lagi).
+    per_phone_stats = qualifying_qs.exclude(customer_phone="").values_list(
+        "customer_phone", flat=True
+    ).distinct()
+    member_loyal = CustomerLoyalty.objects.filter(
+        phone__in=list(per_phone_stats), points__gt=0
+    ).count()
 
     # ── 9. Jam teramai ─────────────────────────────────────────────────
     jam_qs = (

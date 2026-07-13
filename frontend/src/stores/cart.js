@@ -7,8 +7,13 @@ import { orderAPI } from "@/api";
 export const useCartStore = defineStore("cart", () => {
   const cart = ref(JSON.parse(localStorage.getItem("cart") || "{}"));
 
-  const isLoyal = ref(false);
-  const discountPercent = ref(0);
+  // Diskon member % SUDAH DIHAPUS — sistem loyalty sekarang murni poin
+  // (tukar menu gratis, ditangani terpisah lewat PointRedeemBox/PointRewardsPanel
+  // di Checkout.vue). isMember/points di sini cuma buat nampilin badge info,
+  // BUKAN buat motong harga cart lagi.
+  const isMember = ref(false);
+  const points = ref(0);
+  const pointsExpiringNote = ref(null);
 
   watch(
     cart,
@@ -52,27 +57,31 @@ const addToCart = (menu) => {
 
   const clearCart = () => {
     cart.value = {};
-    isLoyal.value = false;
-    discountPercent.value = 0;
+    isMember.value = false;
+    points.value = 0;
+    pointsExpiringNote.value = null;
   };
 
   const checkLoyalty = async (phone) => {
     if (!phone || phone.length < 9) {
-      isLoyal.value = false;
-      discountPercent.value = 0;
+      isMember.value = false;
+      points.value = 0;
+      pointsExpiringNote.value = null;
       return;
     }
 
     try {
       const { data } = await orderAPI.checkLoyalty(phone);
 
-      isLoyal.value = data.is_loyal;
-      discountPercent.value = data.discount_percent ?? 0;
+      isMember.value = data.is_member ?? false;
+      points.value = data.points ?? 0;
+      pointsExpiringNote.value = data.points_expiring_note ?? null;
     } catch (err) {
       console.error(err);
 
-      isLoyal.value = false;
-      discountPercent.value = 0;
+      isMember.value = false;
+      points.value = 0;
+      pointsExpiringNote.value = null;
     }
   };
 
@@ -89,27 +98,24 @@ const addToCart = (menu) => {
     )
   );
 
-  const discountAmount = computed(() => {
-    if (!isLoyal.value) return 0;
-
-    return subtotal.value * (discountPercent.value / 100);
-  });
-
-  const totalPrice = computed(() => subtotal.value - discountAmount.value);
+  // Total sekarang murni subtotal — diskon member % udah ngga ada.
+  // Potongan harga cuma dari promo code (ditangani terpisah di Checkout.vue)
+  // atau tukar poin (item reward masuk cart dengan harga Rp0).
+  const totalPrice = computed(() => subtotal.value);
 
   const isEmpty = computed(() => cartItems.value.length === 0);
 
   return {
     cart,
 
-    isLoyal,
-    discountPercent,
+    isMember,
+    points,
+    pointsExpiringNote,
 
     cartItems,
     cartItemCount,
 
     subtotal,
-    discountAmount,
     totalPrice,
     isEmpty,
 

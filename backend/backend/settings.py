@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'order',
     'homepage',
     'finance',
+    'prediction',
+    'promotions',
 ]
 
 # ========================

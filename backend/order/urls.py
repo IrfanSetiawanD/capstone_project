@@ -1,31 +1,39 @@
 from django.urls import path
+from rest_framework.routers import DefaultRouter
 from .views import (
     list_orders,
     get_order,
     create_order,
     check_loyalty_status,
-    loyal_customers,
     order_reports,
     order_full_report, 
     active_orders_per_day,
     DashboardStatsView,
     LoyaltySettingsView,
     LoyalCustomersView,
-    GiveSpecialPriceView,
+    AdjustPointsView,
     admin_dashboard_daily_stats,
     export_excel_report,
     export_pdf_report,
     unpaid_orders,
     pay_order,
+    cancel_order,
     order_history,
+    new_order_notifications,
     finance_monthly_summary,
     finance_daily_summary,
     StoreSettingsView,
+    available_point_rewards,
+    PointRewardViewSet,
 )
 from .finance_excel import export_finance_excel_view
 from .finance_pdf import export_finance_pdf_view
 
 app_name = "orders"
+
+# CRUD admin buat PointReward (mirip PromoViewSet) — /api/point-rewards/
+router = DefaultRouter()
+router.register(r'point-rewards', PointRewardViewSet, basename='point-rewards')
 
 urlpatterns = [
     # ── Orders CRUD ──────────────────────────────────────────────────────────
@@ -37,12 +45,14 @@ urlpatterns = [
 
     # ── Loyalty — publik ─────────────────────────────────────────────────────
     path("orders/check_loyalty_status/", check_loyalty_status, name="check-loyalty"),
-    path("orders/loyal/",                loyal_customers,       name="loyal-customers"),
+
+    # ── Point Rewards — publik (cek saldo + rekomendasi tukar) ───────────────
+    path("orders/point-rewards/available/", available_point_rewards, name="point-rewards-available"),
 
     # ── Loyalty — admin ──────────────────────────────────────────────────────
     path("orders/loyalty-settings/",               LoyaltySettingsView.as_view(),  name="loyalty-settings"),
-    path("orders/loyal-customers/",                LoyalCustomersView.as_view(),   name="loyal-customers-admin"),
-    path("orders/give-special-price/<str:phone>/", GiveSpecialPriceView.as_view(), name="give-special-price"),
+    path("orders/loyal-customers/",           LoyalCustomersView.as_view(), name="loyal-customers-admin"),
+    path("orders/adjust-points/<str:phone>/", AdjustPointsView.as_view(),   name="adjust-points"),
 
     # ── Reports & dashboard ──────────────────────────────────────────────────
     path("orders/reports/",                        order_reports,                name="order-reports"),
@@ -59,6 +69,7 @@ urlpatterns = [
     # ── Tagihan belum lunas & riwayat ─────────────────────────────────────────
     path("orders/unpaid/",   unpaid_orders, name="unpaid-orders"),
     path("orders/history/",  order_history, name="order-history"),
+    path("orders/notifications/", new_order_notifications, name="order-notifications"),
 
     # ── Active orders (prefix berbeda) ────────────────────────────────────────
     path("active-orders/",   active_orders_per_day, name="active-orders"),
@@ -66,6 +77,7 @@ urlpatterns = [
     path("orders/settings/", StoreSettingsView.as_view(), name="store-settings"),
 
     # ── Detail & pay — HARUS PALING BAWAH karena pakai <int:pk> ─────────────
-    path("orders/<int:pk>/",      get_order, name="order-detail"),
-    path("orders/<int:pk>/pay/",  pay_order, name="pay-order"),
-]
+    path("orders/<int:pk>/",         get_order,    name="order-detail"),
+    path("orders/<int:pk>/pay/",     pay_order,    name="pay-order"),
+    path("orders/<int:pk>/cancel/",  cancel_order, name="cancel-order"),
+] + router.urls

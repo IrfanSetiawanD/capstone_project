@@ -10,6 +10,8 @@ urlpatterns = [
     path('api/', include('order.urls')),
     path('api/homepage/', include('homepage.urls')),
     path('api/', include('finance.urls')),
+    path('api/', include('prediction.urls')),
+    path('api/', include('promotions.urls')),
 ]
 
 if settings.DEBUG:
